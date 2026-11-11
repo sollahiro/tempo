@@ -112,3 +112,61 @@ final class IntensityCoachTests: XCTestCase {
         XCTAssertEqual(cues.first?.0, 180 + 90 + 20)
     }
 }
+
+final class TempoCoachTests: XCTestCase {
+    let plan = IntervalPlan.standard
+    // 速歩下限 130, 速歩上限 145, 緩歩上限 100
+    let zones = HeartRateZones(restingHeartRate: 60, maxHeartRate: 160)
+
+    private func run(_ coach: inout TempoCoach, heartRate: Double, from: Int, to: Int) -> [(Int, HapticCue)] {
+        var changes: [(Int, HapticCue)] = []
+        for t in from...to {
+            let now = TimeInterval(t)
+            if let position = plan.position(at: now),
+               let change = coach.update(heartRate: heartRate, position: position, now: now) {
+                changes.append((t, change))
+            }
+        }
+        return changes
+    }
+
+    func testPulseInterval() {
+        let coach = TempoCoach(zones: nil)
+        XCTAssertEqual(coach.pulseInterval(for: .brisk), 120 / 116, accuracy: 0.0001)
+        XCTAssertEqual(coach.pulseInterval(for: .easy), 120 / 96, accuracy: 0.0001)
+    }
+
+    func testFixedTempoWithoutZones() {
+        var coach = TempoCoach(zones: nil)
+        XCTAssertTrue(run(&coach, heartRate: 90, from: 0, to: 179).isEmpty)
+        XCTAssertEqual(coach.briskCadence, 116)
+    }
+
+    func testBriskTempoRisesWhenHeartRateIsLow() {
+        var coach = TempoCoach(zones: zones)
+        let changes = run(&coach, heartRate: 110, from: 0, to: 179)
+        // 60秒は待ち、その後30秒ごと: 60, 90, 120, 150
+        XCTAssertEqual(changes.map(\.0), [60, 90, 120, 150])
+        XCTAssertTrue(changes.allSatisfy { $0.1 == .speedUp })
+        XCTAssertEqual(coach.briskCadence, 132)
+    }
+
+    func testBriskTempoIsCarriedToNextSetAndClamped() {
+        var coach = TempoCoach(zones: zones)
+        _ = run(&coach, heartRate: 110, from: 0, to: 1799)
+        XCTAssertEqual(coach.briskCadence, 140) // 上限
+    }
+
+    func testTempoStaysWhenInRange() {
+        var coach = TempoCoach(zones: zones)
+        XCTAssertTrue(run(&coach, heartRate: 135, from: 0, to: 179).isEmpty)
+    }
+
+    func testEasyTempoDropsWhenHeartRateStaysHigh() {
+        var coach = TempoCoach(zones: zones)
+        let changes = run(&coach, heartRate: 120, from: 180, to: 359)
+        XCTAssertEqual(changes.first?.0, 270)
+        XCTAssertTrue(changes.allSatisfy { $0.1 == .slowDown })
+        XCTAssertLessThan(coach.easyCadence, 96)
+    }
+}

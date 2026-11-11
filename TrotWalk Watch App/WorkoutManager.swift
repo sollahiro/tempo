@@ -30,6 +30,8 @@ final class WorkoutManager: NSObject {
     private(set) var heartRate: Double?
     private(set) var distanceMeters: Double?
     private(set) var zones: HeartRateZones?
+    /// 今の歩調テンポ（歩/分）。テンポがオフなら nil。
+    private(set) var cadence: Double?
     private(set) var summary: WorkoutSummary?
     private(set) var errorMessage: String?
 
@@ -41,6 +43,8 @@ final class WorkoutManager: NSObject {
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var schedule: CueSchedule?
     @ObservationIgnored private var coach: IntensityCoach?
+    @ObservationIgnored private var tempo: TempoCoach?
+    @ObservationIgnored private var metronome: Task<Void, Never>?
     @ObservationIgnored private var lastTick: TimeInterval = 0
     @ObservationIgnored private var currentSegment: IntervalSegment?
     @ObservationIgnored private var currentSegmentStart: Date?
@@ -87,7 +91,15 @@ final class WorkoutManager: NSObject {
         await requestAuthorization()
 
         zones = settings.intensityGuideEnabled ? await HealthProfile.zones(store: healthStore) : nil
-        coach = zones.map { IntensityCoach(zones: $0) }
+        if settings.tempoEnabled {
+            // テンポがオンなら、心拍の目安があるときはテンポそのものを自動調整する
+            tempo = TempoCoach(zones: zones)
+            coach = nil
+        } else {
+            tempo = nil
+            coach = zones.map { IntensityCoach(zones: $0) }
+        }
+        cadence = tempo?.cadence(for: .brisk)
         schedule = settings.cueSchedule
 
         let configuration = HKWorkoutConfiguration()
@@ -118,6 +130,7 @@ final class WorkoutManager: NSObject {
             state = .running
             haptics.play(.briskStart)
             startTicker()
+            startMetronome()
         } catch {
             errorMessage = "ワークアウトを開始できませんでした"
             session?.end()
@@ -144,6 +157,7 @@ final class WorkoutManager: NSObject {
         guard state == .running || state == .paused else { return }
         state = .ending
         ticker?.cancel()
+        metronome?.cancel()
         recordCurrentSegment(endingAt: Date())
         session?.end()
     }
@@ -184,6 +198,12 @@ final class WorkoutManager: NSObject {
         } else if let position, let heartRate,
                   let cue = coach?.evaluate(heartRate: heartRate, position: position, now: now) {
             haptics.play(cue)
+        }
+
+        if let position, tempo != nil {
+            // テンポの変化は振動の間隔そのもので伝わるので、別の合図は鳴らさない
+            tempo?.update(heartRate: heartRate, position: position, now: now)
+            cadence = tempo?.cadence(for: position.segment.phase)
         }
 
         if let position, position.segment != currentSegment {
@@ -228,9 +248,41 @@ final class WorkoutManager: NSObject {
         state = .finished
     }
 
+    /// 歩調テンポの振動を刻む。間隔は毎拍、今のフェーズとテンポから決め直す。
+    private func startMetronome() {
+        metronome?.cancel()
+        guard tempo != nil else { return }
+        metronome = Task { [weak self] in
+            let clock = ContinuousClock()
+            var next = clock.now
+            while !Task.isCancelled {
+                guard let interval = self?.currentPulseInterval() else {
+                    // 一時停止中など。再開したらその時点から刻み直す
+                    try? await clock.sleep(for: .milliseconds(250))
+                    next = clock.now
+                    continue
+                }
+                next = max(next.advanced(by: .seconds(interval)), clock.now)
+                try? await clock.sleep(until: next)
+                if Task.isCancelled { return }
+                if self?.currentPulseInterval() != nil {
+                    self?.haptics.tempoTick()
+                }
+            }
+        }
+    }
+
+    private func currentPulseInterval() -> TimeInterval? {
+        guard state == .running, let tempo, let position else { return nil }
+        return tempo.pulseInterval(for: position.segment.phase)
+    }
+
     private func cleanUp() {
         ticker?.cancel()
         ticker = nil
+        metronome?.cancel()
+        metronome = nil
+        tempo = nil
         session = nil
         builder = nil
         schedule = nil

@@ -26,6 +26,10 @@ struct WorkoutView: View {
                 if let heartRate = workout.heartRate {
                     Label("\(Int(heartRate))", systemImage: "heart.fill")
                 }
+                if let cadence = workout.cadence {
+                    Label("\(Int(cadence))", systemImage: "metronome")
+                        .accessibilityLabel("テンポ 毎分\(Int(cadence))歩")
+                }
             }
             .font(.footnote)
 

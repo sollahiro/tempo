@@ -7,9 +7,12 @@ import WatchKit
 /// |--------------|--------------------------|
 /// | 速歩の開始   | 上向き × 2               |
 /// | 緩歩の開始   | 下向き × 1               |
-/// | 切り替え予告 | クリック × 1（10秒前）   |
+/// | 切り替え予告 | 通知（10秒前）           |
+/// | 歩調テンポ   | 軽いクリック（2歩に1回） |
 /// | もう少し速く | クリック → 上向き        |
 /// | 少しゆるめて | クリック → 下向き        |
+///
+/// テンポのクリックは、ほかの合図が鳴っている間とその直後は止める。
 /// | 一時停止     | 停止                     |
 /// | 再開         | 開始                     |
 /// | 完了         | 成功                     |
@@ -18,10 +21,20 @@ final class HapticPlayer {
     private var playback: Task<Void, Never>?
     private let gap: Duration = .milliseconds(500)
 
+    private var cueEndsAt: ContinuousClock.Instant?
+    private let tempoQuietTime: Duration = .milliseconds(1200)
+
     nonisolated init() {}
+
+    /// 歩調テンポの1拍。合図と重なるときは鳴らさない。
+    func tempoTick() {
+        if let cueEndsAt, ContinuousClock.now < cueEndsAt + tempoQuietTime { return }
+        WKInterfaceDevice.current().play(.click)
+    }
 
     func play(_ cue: HapticCue) {
         let pattern = Self.pattern(for: cue)
+        cueEndsAt = ContinuousClock.now + gap * (pattern.count - 1)
         playback?.cancel()
         playback = Task { [gap] in
             for (index, haptic) in pattern.enumerated() {
@@ -36,7 +49,7 @@ final class HapticPlayer {
         switch cue {
         case .briskStart: [.directionUp, .directionUp]
         case .easyStart: [.directionDown]
-        case .switchSoon: [.click]
+        case .switchSoon: [.notification]
         case .speedUp: [.click, .directionUp]
         case .slowDown: [.click, .directionDown]
         case .paused: [.stop]

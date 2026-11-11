@@ -26,7 +26,8 @@ struct WatchSettingsView: View {
 
             Section {
                 Toggle("切り替え10秒前に予告", isOn: $settings.value.switchWarningEnabled)
-                Toggle("強度ガイド", isOn: $settings.value.intensityGuideEnabled)
+                Toggle("歩調テンポ", isOn: $settings.value.tempoEnabled)
+                Toggle("心拍で自動調整", isOn: $settings.value.intensityGuideEnabled)
             } footer: {
                 Text(guideFooter)
             }
@@ -35,6 +36,7 @@ struct WatchSettingsView: View {
                 ForEach(HapticSample.all, id: \.title) { sample in
                     Button(sample.title) { haptics.play(sample.cue) }
                 }
+                Button("歩調テンポ") { haptics.tempoTick() }
             }
         }
         .navigationTitle("設定")
@@ -46,13 +48,17 @@ struct WatchSettingsView: View {
     }
 
     private var guideFooter: String {
+        let tempo = settings.value.tempoEnabled
         guard settings.value.intensityGuideEnabled else {
-            return "オンにすると、心拍が目安から外れたときだけ振動で知らせます。"
+            return tempo
+                ? "2歩に1回、軽い振動でテンポを刻みます。心拍で自動調整をオンにすると、テンポが心拍に合わせて変わります。"
+                : "心拍で自動調整をオンにすると、心拍が目安から外れたときだけ振動で知らせます。"
         }
         guard let zones else {
             return "ヘルスケアに誕生日を登録すると、心拍の目安を計算できます。"
         }
-        return "速歩の目安は心拍\(Int(zones.briskLowerBound))以上、緩歩は\(Int(zones.easyUpperBound))以下です（推定）。息が上がって「ややきつい」と感じる体感を優先してください。"
+        let how = tempo ? "心拍が目安より低ければテンポを上げ、高ければ下げます。" : "目安から外れたときだけ振動で知らせます。"
+        return "速歩の目安は心拍\(Int(zones.briskLowerBound))以上、緩歩は\(Int(zones.easyUpperBound))以下です（推定）。\(how)息が上がって「ややきつい」と感じる体感を優先してください。"
     }
 }
 
