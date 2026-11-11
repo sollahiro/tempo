@@ -26,6 +26,11 @@ final class HapticPlayer {
 
     nonisolated init() {}
 
+    /// 開始前カウントダウンの1拍
+    func countdownTick() {
+        WKInterfaceDevice.current().play(.click)
+    }
+
     /// 歩調テンポの1拍。合図と重なるときは鳴らさない。
     func tempoTick() {
         if let cueEndsAt, ContinuousClock.now < cueEndsAt + tempoQuietTime { return }

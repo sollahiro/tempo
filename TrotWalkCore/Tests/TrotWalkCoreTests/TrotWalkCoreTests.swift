@@ -11,13 +11,46 @@ final class IntervalPlanTests: XCTestCase {
         XCTAssertEqual(plan.segments.last?.phase, .easy)
     }
 
-    func testSetsAreClamped() {
-        XCTAssertEqual(IntervalPlan(sets: 0).sets, 1)
-        XCTAssertEqual(IntervalPlan(sets: 99).sets, 10)
+    func testDurationOptions() {
+        XCTAssertEqual(IntervalPlan.durationOptions, [1200, 1800, 2400, 3000, 3600])
+    }
+
+    func testEveryOptionEndsExactlyOnTimeWithEasyWalking() {
+        for brisk in IntervalPlan.briskOptions {
+            for total in IntervalPlan.durationOptions {
+                let plan = IntervalPlan(briskDuration: brisk, easyDuration: 180, totalDuration: total)
+                XCTAssertEqual(plan.segments.last?.end, total)
+                XCTAssertEqual(plan.segments.last?.phase, .easy)
+                // 区間は隙間なく続く
+                for (a, b) in zip(plan.segments, plan.segments.dropFirst()) {
+                    XCTAssertEqual(a.end, b.start)
+                    XCTAssertNotEqual(a.phase, b.phase)
+                }
+            }
+        }
+    }
+
+    func test20MinutesWith3MinuteBriskAddsShortSet() {
+        let plan = IntervalPlan(briskDuration: 180, easyDuration: 180, totalDuration: 1200)
+        XCTAssertEqual(plan.setCount, 4)
+        XCTAssertEqual(plan.segments.suffix(2).map(\.duration), [60, 60])
+        XCTAssertEqual(plan.totalBriskDuration, 600)
+    }
+
+    func test20MinutesWith2MinuteBriskIsFourFullSets() {
+        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, totalDuration: 1200)
+        XCTAssertEqual(plan.setCount, 4)
+        XCTAssertEqual(plan.totalBriskDuration, 480)
+    }
+
+    func testSmallRemainderExtendsLastEasy() {
+        let plan = IntervalPlan(briskDuration: 180, easyDuration: 180, totalDuration: 1800 + 60)
+        XCTAssertEqual(plan.setCount, 5)
+        XCTAssertEqual(plan.segments.last?.duration, 240)
     }
 
     func testPositionMatchesSegments() {
-        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, sets: 3)
+        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, totalDuration: 900)
         for segment in plan.segments {
             let mid = segment.start + segment.duration / 2
             XCTAssertEqual(plan.position(at: mid)?.segment, segment)
@@ -30,7 +63,7 @@ final class IntervalPlanTests: XCTestCase {
     }
 
     func testBriskTimeUpTo() {
-        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, sets: 3)
+        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, totalDuration: 900)
         XCTAssertEqual(plan.briskTime(upTo: 60), 60)
         XCTAssertEqual(plan.briskTime(upTo: 200), 120)
         XCTAssertEqual(plan.briskTime(upTo: 330), 150)
@@ -39,7 +72,7 @@ final class IntervalPlanTests: XCTestCase {
 }
 
 final class CueScheduleTests: XCTestCase {
-    let plan = IntervalPlan(briskDuration: 180, easyDuration: 180, sets: 2)
+    let plan = IntervalPlan(briskDuration: 180, easyDuration: 180, totalDuration: 720)
 
     func testCuesAtBoundaries() {
         let schedule = CueSchedule(plan: plan)

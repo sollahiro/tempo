@@ -22,8 +22,10 @@ struct ContentView: View {
                             Text(DurationText.minutes(seconds)).tag(seconds)
                         }
                     }
-                    Stepper(value: $settings.value.sets, in: IntervalPlan.setRange) {
-                        LabeledContent("セット数", value: "\(settings.value.sets)セット")
+                    Picker("時間", selection: $settings.value.totalDuration) {
+                        ForEach(IntervalPlan.durationOptions, id: \.self) { seconds in
+                            Text(DurationText.minutes(seconds)).tag(seconds)
+                        }
                     }
                     Toggle("切り替え10秒前に予告", isOn: $settings.value.switchWarningEnabled)
                     Toggle("歩調テンポの振動", isOn: $settings.value.tempoEnabled)
@@ -37,7 +39,7 @@ struct ContentView: View {
                 } header: {
                     Text("設定")
                 } footer: {
-                    Text("約\(DurationText.minutes(settings.value.plan.totalDuration))、うち速歩\(DurationText.minutes(settings.value.plan.totalBriskDuration))。設定は Apple Watch にも反映されます。")
+                    Text("うち速歩は約\(DurationText.minutes(settings.value.plan.totalBriskDuration))。途中でやめても、そこまでの記録は残ります。設定は Apple Watch にも反映されます。")
                 }
 
                 Section("振動の合図") {
@@ -52,7 +54,7 @@ struct ContentView: View {
 
                 Section("歩き方の目安") {
                     Text("速歩は、息が上がって「ややきつい」と感じるくらい。緩歩は、会話が楽にできるくらいのゆっくり歩きです。")
-                    Text("3分ずつが基本ですが、速歩は2分にしても構いません。セット数も自由に選べます。")
+                    Text("3分ずつが基本ですが、速歩は2分にしても構いません。時間は20分から60分まで、10分刻みで選べます。")
                     Text("歩調テンポは、速歩で毎分116歩、緩歩で96歩から始まります。心拍で自動調整をオンにすると、速歩で心拍が低ければテンポが上がり、高すぎたり緩歩で下がらなかったりすると下がります。上げた速歩のテンポは次のセットにも引き継ぎます。")
                     Text("ワークアウトの終わりに「速歩はどうでしたか？」と一度だけ聞きます。「楽だった」なら次回の目安を少し上げ、「きつかった」なら少し下げます。答えなくても大丈夫です。")
                     Text("心拍の目安は、年齢と安静時心拍から推定します。体感と違うときは体感を優先してください。")

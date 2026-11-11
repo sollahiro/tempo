@@ -24,56 +24,71 @@ public struct IntervalPosition: Equatable, Sendable {
     public var remainingInSegment: TimeInterval { max(0, segment.duration - elapsedInSegment) }
 }
 
-/// 「速歩 → 緩歩」を1セットとして、指定セット数くり返すプラン。
-public struct IntervalPlan: Equatable, Codable, Sendable {
-    public static let setRange = 1...10
+/// 「速歩 → 緩歩」を1セットとして、選んだ時間いっぱいまでくり返すプラン。
+///
+/// 時間がセットの長さで割り切れないときは、最後に短いセットを足して時間ちょうどで終える。
+/// 余りが2分未満なら、最後の緩歩をその分だけ延ばす（速歩で終わらないようにするため）。
+public struct IntervalPlan: Equatable, Sendable {
+    /// 選べる時間（秒）: 20〜60分、10分刻み
+    public static let durationOptions: [TimeInterval] = [20, 30, 40, 50, 60].map { $0 * 60 }
     public static let briskOptions: [TimeInterval] = [180, 120]
 
     public var briskDuration: TimeInterval
     public var easyDuration: TimeInterval
-    public var sets: Int
+    public let totalDuration: TimeInterval
+    public let segments: [IntervalSegment]
 
-    public init(briskDuration: TimeInterval = 180, easyDuration: TimeInterval = 180, sets: Int = 5) {
+    public init(briskDuration: TimeInterval = 180, easyDuration: TimeInterval = 180, totalDuration: TimeInterval = 30 * 60) {
         self.briskDuration = max(1, briskDuration)
         self.easyDuration = max(1, easyDuration)
-        self.sets = min(max(sets, Self.setRange.lowerBound), Self.setRange.upperBound)
+        self.totalDuration = max(totalDuration, self.briskDuration + self.easyDuration)
+        self.segments = Self.makeSegments(brisk: self.briskDuration, easy: self.easyDuration, total: self.totalDuration)
     }
 
     public static let standard = IntervalPlan()
 
-    public var totalDuration: TimeInterval { Double(sets) * (briskDuration + easyDuration) }
-    public var totalBriskDuration: TimeInterval { Double(sets) * briskDuration }
+    public var totalBriskDuration: TimeInterval {
+        segments.filter { $0.phase == .brisk }.reduce(0) { $0 + $1.duration }
+    }
 
-    public var segments: [IntervalSegment] {
+    public var setCount: Int { segments.last?.setNumber ?? 0 }
+
+    private static func makeSegments(brisk: TimeInterval, easy: TimeInterval, total: TimeInterval) -> [IntervalSegment] {
         var result: [IntervalSegment] = []
         var cursor: TimeInterval = 0
-        for set in 1...sets {
-            for phase in WalkPhase.allCases {
-                let duration = phase == .brisk ? briskDuration : easyDuration
-                result.append(IntervalSegment(index: result.count, setNumber: set, phase: phase, start: cursor, duration: duration))
-                cursor += duration
-            }
+        var set = 0
+
+        func append(_ phase: WalkPhase, _ duration: TimeInterval) {
+            result.append(IntervalSegment(index: result.count, setNumber: set, phase: phase, start: cursor, duration: duration))
+            cursor += duration
+        }
+
+        while total - cursor >= brisk + easy {
+            set += 1
+            append(.brisk, brisk)
+            append(.easy, easy)
+        }
+
+        let remainder = total - cursor
+        if remainder >= 120 {
+            // 短いセットを足す。速歩は残りの半分まで（緩歩で終えるため）
+            set += 1
+            let shortBrisk = min(brisk, (remainder / 2).rounded(.down))
+            append(.brisk, shortBrisk)
+            append(.easy, remainder - shortBrisk)
+        } else if remainder > 0, let last = result.popLast() {
+            cursor -= last.duration
+            append(last.phase, last.duration + remainder)
         }
         return result
     }
 
     /// 経過時間に対応する区間。プランが終わっていれば nil。
     public func position(at elapsed: TimeInterval) -> IntervalPosition? {
-        guard elapsed >= 0, elapsed < totalDuration else { return nil }
-        let setLength = briskDuration + easyDuration
-        let setIndex = Int(elapsed / setLength)
-        let inSet = elapsed - Double(setIndex) * setLength
-        let isBrisk = inSet < briskDuration
-        let segmentIndex = setIndex * 2 + (isBrisk ? 0 : 1)
-        let segmentStart = Double(setIndex) * setLength + (isBrisk ? 0 : briskDuration)
-        let segment = IntervalSegment(
-            index: segmentIndex,
-            setNumber: setIndex + 1,
-            phase: isBrisk ? .brisk : .easy,
-            start: segmentStart,
-            duration: isBrisk ? briskDuration : easyDuration
-        )
-        return IntervalPosition(segment: segment, elapsedInSegment: elapsed - segmentStart)
+        guard elapsed >= 0, elapsed < totalDuration,
+              let segment = segments.last(where: { $0.start <= elapsed })
+        else { return nil }
+        return IntervalPosition(segment: segment, elapsedInSegment: elapsed - segment.start)
     }
 
     public func isFinished(at elapsed: TimeInterval) -> Bool { elapsed >= totalDuration }

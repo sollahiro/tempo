@@ -23,6 +23,8 @@ struct RootView: View {
             StartView()
         case .preparing:
             ProgressView("準備中")
+        case .countdown(let count):
+            CountdownView(count: count)
         case .running, .paused, .ending:
             WorkoutView()
         case .finished:

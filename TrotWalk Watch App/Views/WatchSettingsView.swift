@@ -17,8 +17,10 @@ struct WatchSettingsView: View {
                         Text(DurationText.minutes(seconds)).tag(seconds)
                     }
                 }
-                Stepper(value: $settings.value.sets, in: IntervalPlan.setRange) {
-                    Text("\(settings.value.sets)セット")
+                Picker("時間", selection: $settings.value.totalDuration) {
+                    ForEach(IntervalPlan.durationOptions, id: \.self) { seconds in
+                        Text(DurationText.minutes(seconds)).tag(seconds)
+                    }
                 }
             } footer: {
                 Text("速歩の合計 \(DurationText.minutes(settings.value.plan.totalBriskDuration))")

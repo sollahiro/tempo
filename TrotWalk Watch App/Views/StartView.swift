@@ -6,6 +6,8 @@ struct StartView: View {
     @Environment(SettingsStore.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
+
         NavigationStack {
             ScrollView {
                 VStack(spacing: 10) {
@@ -18,6 +20,13 @@ struct StartView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
+
+                    Picker("時間", selection: $settings.value.totalDuration) {
+                        ForEach(IntervalPlan.durationOptions, id: \.self) { seconds in
+                            Text(DurationText.minutes(seconds)).tag(seconds)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
 
                     Text(planText)
                         .font(.footnote)
@@ -44,6 +53,6 @@ struct StartView: View {
 
     private var planText: String {
         let plan = settings.value.plan
-        return "速歩\(DurationText.minutes(plan.briskDuration))・緩歩\(DurationText.minutes(plan.easyDuration))を\(plan.sets)セット\n約\(DurationText.minutes(plan.totalDuration))"
+        return "速歩\(DurationText.minutes(plan.briskDuration))と緩歩\(DurationText.minutes(plan.easyDuration))をくり返します。途中でやめても大丈夫です。"
     }
 }

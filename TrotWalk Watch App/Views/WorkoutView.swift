@@ -21,7 +21,7 @@ struct WorkoutView: View {
 
             HStack(spacing: 10) {
                 if let position {
-                    Text("\(position.segment.setNumber)/\(workout.settings.sets)")
+                    Text("\(position.segment.setNumber)/\(workout.plan.setCount)")
                 }
                 if let heartRate = workout.heartRate {
                     Label("\(Int(heartRate))", systemImage: "heart.fill")
@@ -56,9 +56,11 @@ struct WorkoutView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(phase.color.opacity(isLuminanceReduced ? 0.25 : 0.8).ignoresSafeArea())
-        .confirmationDialog("ワークアウトを終了しますか？", isPresented: $confirmingEnd) {
-            Button("終了して保存", role: .destructive) { workout.end() }
+        .confirmationDialog("ここで終えますか？", isPresented: $confirmingEnd) {
+            Button("終える") { workout.end() }
             Button("続ける", role: .cancel) {}
+        } message: {
+            Text("途中でも、ここまでの記録は保存されます。")
         }
     }
 }

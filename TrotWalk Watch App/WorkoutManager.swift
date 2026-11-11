@@ -18,6 +18,8 @@ final class WorkoutManager: NSObject {
     enum State: Equatable {
         case idle
         case preparing
+        /// 開始前のカウントダウン（3, 2, 1）
+        case countdown(Int)
         case running
         case paused
         case ending
@@ -26,6 +28,7 @@ final class WorkoutManager: NSObject {
 
     private(set) var state: State = .idle
     private(set) var settings = WalkSettings()
+    private(set) var plan = IntervalPlan.standard
     private(set) var elapsed: TimeInterval = 0
     private(set) var heartRate: Double?
     private(set) var distanceMeters: Double?
@@ -35,7 +38,7 @@ final class WorkoutManager: NSObject {
     private(set) var summary: WorkoutSummary?
     private(set) var errorMessage: String?
 
-    var position: IntervalPosition? { settings.plan.position(at: elapsed) }
+    var position: IntervalPosition? { plan.position(at: elapsed) }
 
     let healthStore = HKHealthStore()
     @ObservationIgnored private var session: HKWorkoutSession?
@@ -46,6 +49,8 @@ final class WorkoutManager: NSObject {
     @ObservationIgnored private var tempo: TempoCoach?
     /// 終了後に回答を反映するまで、最後の速歩テンポを持っておく
     @ObservationIgnored private var finalBriskCadence: Double?
+    @ObservationIgnored private var countdownSkipped = false
+    @ObservationIgnored private var countdownCancelled = false
     /// 回答を受け付けたか（終了画面で一度だけ聞く）
     private(set) var feedbackRecorded = false
     @ObservationIgnored private var metronome: Task<Void, Never>?
@@ -86,6 +91,9 @@ final class WorkoutManager: NSObject {
         state = .preparing
         errorMessage = nil
         self.settings = settings
+        plan = settings.plan
+        countdownSkipped = false
+        countdownCancelled = false
         elapsed = 0
         lastTick = 0
         heartRate = nil
@@ -124,6 +132,16 @@ final class WorkoutManager: NSObject {
             self.session = session
             self.builder = builder
 
+            // 標準のワークアウトアプリと同じく、カウントダウンの間にセンサーを準備する
+            session.prepare()
+            await runCountdown()
+            if countdownCancelled {
+                session.end()
+                cleanUp()
+                state = .idle
+                return
+            }
+
             let startDate = Date()
             session.startActivity(with: startDate)
             try await builder.beginCollection(at: startDate)
@@ -131,10 +149,10 @@ final class WorkoutManager: NSObject {
                 HKMetadataKeyIndoorWorkout: false,
                 MetadataKey.briskSeconds: settings.briskDuration,
                 MetadataKey.easySeconds: settings.easyDuration,
-                MetadataKey.plannedSets: settings.sets,
+                MetadataKey.plannedMinutes: Int(settings.totalDuration / 60),
             ])
 
-            currentSegment = settings.plan.segments.first
+            currentSegment = plan.segments.first
             currentSegmentStart = startDate
             state = .running
             haptics.play(.briskStart)
@@ -145,6 +163,29 @@ final class WorkoutManager: NSObject {
             session?.end()
             cleanUp()
             state = .idle
+        }
+    }
+
+    /// カウントダウンを飛ばしてすぐ始める（画面をタップ）
+    func skipCountdown() {
+        countdownSkipped = true
+    }
+
+    /// カウントダウン中にやめる。記録は残さない。
+    func cancelCountdown() {
+        countdownCancelled = true
+    }
+
+    private func runCountdown() async {
+        for count in stride(from: 3, through: 1, by: -1) {
+            if countdownSkipped || countdownCancelled { return }
+            state = .countdown(count)
+            haptics.countdownTick()
+            // 1秒待つ。途中でタップされたらすぐ抜ける
+            for _ in 0..<20 {
+                if countdownSkipped || countdownCancelled { return }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
         }
     }
 
@@ -260,7 +301,7 @@ final class WorkoutManager: NSObject {
         }
         summary = WorkoutSummary(
             totalTime: total,
-            briskTime: settings.plan.briskTime(upTo: total),
+            briskTime: plan.briskTime(upTo: total),
             distanceMeters: distanceMeters
         )
         finalBriskCadence = tempo?.briskCadence
@@ -344,7 +385,7 @@ enum MetadataKey {
     static let setNumber = "TrotWalkSet"
     static let briskSeconds = "TrotWalkBriskSeconds"
     static let easySeconds = "TrotWalkEasySeconds"
-    static let plannedSets = "TrotWalkPlannedSets"
+    static let plannedMinutes = "TrotWalkPlannedMinutes"
 }
 
 // MARK: - HKWorkoutSessionDelegate

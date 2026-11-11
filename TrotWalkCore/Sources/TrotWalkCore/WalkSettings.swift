@@ -6,8 +6,8 @@ public struct WalkSettings: Equatable, Codable, Sendable {
     public var briskDuration: TimeInterval
     /// 緩歩の長さ（秒）
     public var easyDuration: TimeInterval
-    /// セット数
-    public var sets: Int
+    /// ワークアウトの長さ（秒）。20〜60分、10分刻み。
+    public var totalDuration: TimeInterval
     /// 切り替え10秒前の予告
     public var switchWarningEnabled: Bool
     /// 歩調のテンポを振動で刻む
@@ -20,7 +20,7 @@ public struct WalkSettings: Equatable, Codable, Sendable {
     public init(
         briskDuration: TimeInterval = 180,
         easyDuration: TimeInterval = 180,
-        sets: Int = 5,
+        totalDuration: TimeInterval = 30 * 60,
         switchWarningEnabled: Bool = true,
         tempoEnabled: Bool = true,
         stepsPerPulse: Int = 1,
@@ -28,7 +28,7 @@ public struct WalkSettings: Equatable, Codable, Sendable {
     ) {
         self.briskDuration = briskDuration
         self.easyDuration = easyDuration
-        self.sets = sets
+        self.totalDuration = totalDuration
         self.switchWarningEnabled = switchWarningEnabled
         self.tempoEnabled = tempoEnabled
         self.stepsPerPulse = stepsPerPulse
@@ -36,7 +36,7 @@ public struct WalkSettings: Equatable, Codable, Sendable {
     }
 
     public var plan: IntervalPlan {
-        IntervalPlan(briskDuration: briskDuration, easyDuration: easyDuration, sets: sets)
+        IntervalPlan(briskDuration: briskDuration, easyDuration: easyDuration, totalDuration: totalDuration)
     }
 
     public var cueSchedule: CueSchedule {
