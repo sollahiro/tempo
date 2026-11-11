@@ -1,33 +1,24 @@
 import SwiftUI
 import TrotWalkCore
 
-/// ワークアウト中の画面。基本は見なくてよいが、見たときは色だけで分かるようにする。
+/// ワークアウト中の画面。時間や数字は出さず、合図はすべて振動で伝える。
+/// 画面に残すのは今のフェーズ名と、一時停止・終了の操作だけ。
 struct WorkoutView: View {
     @Environment(WorkoutManager.self) private var workout
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @State private var confirmingEnd = false
 
     var body: some View {
-        let position = workout.position
-        let phase = position?.segment.phase ?? .easy
+        let phase = workout.phase
 
-        VStack(spacing: 4) {
+        VStack(spacing: 12) {
+            Spacer()
+
             Text(workout.state == .paused ? "一時停止中" : phase.title)
-                .font(.title3.bold())
+                .font(.title3)
+                .foregroundStyle(.secondary)
 
-            Text(DurationText.clock(position?.remainingInSegment ?? 0))
-                .font(.system(size: 46, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-
-            HStack(spacing: 10) {
-                if let position {
-                    Text("\(position.segment.setNumber)/\(workout.settings.sets)")
-                }
-                if let heartRate = workout.heartRate {
-                    Label("\(Int(heartRate))", systemImage: "heart.fill")
-                }
-            }
-            .font(.footnote)
+            Spacer()
 
             if !isLuminanceReduced {
                 HStack {
@@ -46,12 +37,12 @@ struct WorkoutView: View {
                     }
                     .accessibilityLabel("終了")
                 }
-                .padding(.top, 4)
                 .disabled(workout.state == .ending)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(phase.color.opacity(isLuminanceReduced ? 0.25 : 0.8).ignoresSafeArea())
+        .background(phase.color.opacity(isLuminanceReduced ? 0.1 : 0.3).ignoresSafeArea())
+        .animation(.easeInOut(duration: 1), value: phase)
         .confirmationDialog("ワークアウトを終了しますか？", isPresented: $confirmingEnd) {
             Button("終了して保存", role: .destructive) { workout.end() }
             Button("続ける", role: .cancel) {}

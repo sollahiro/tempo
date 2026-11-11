@@ -26,7 +26,10 @@ final class WorkoutManager: NSObject {
 
     private(set) var state: State = .idle
     private(set) var settings = WalkSettings()
-    private(set) var elapsed: TimeInterval = 0
+    /// 今のフェーズ。画面はこれだけを見る（数字や時間は出さない）。
+    private(set) var phase: WalkPhase = .brisk
+    /// 画面では使わないので監視しない（再描画を減らして電池を節約）
+    @ObservationIgnored private(set) var elapsed: TimeInterval = 0
     private(set) var heartRate: Double?
     private(set) var distanceMeters: Double?
     private(set) var zones: HeartRateZones?
@@ -79,6 +82,7 @@ final class WorkoutManager: NSObject {
         errorMessage = nil
         self.settings = settings
         elapsed = 0
+        phase = .brisk
         lastTick = 0
         heartRate = nil
         distanceMeters = nil
@@ -184,6 +188,10 @@ final class WorkoutManager: NSObject {
         } else if let position, let heartRate,
                   let cue = coach?.evaluate(heartRate: heartRate, position: position, now: now) {
             haptics.play(cue)
+        }
+
+        if let position, position.segment.phase != phase {
+            phase = position.segment.phase
         }
 
         if let position, position.segment != currentSegment {
