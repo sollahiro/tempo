@@ -25,6 +25,19 @@ struct SummaryView: View {
                         .foregroundStyle(.red)
                 }
 
+                if workout.feedbackRecorded {
+                    Text("次回の目安に反映しました。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("速歩はどうでしたか？")
+                        .font(.footnote)
+                        .padding(.top, 4)
+                    ForEach(EffortFeedback.allCases, id: \.self) { feedback in
+                        Button(feedback.title) { workout.recordFeedback(feedback) }
+                    }
+                }
+
                 Text("記録はフィットネスとヘルスケアに保存されました。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -41,6 +54,16 @@ struct SummaryView: View {
             Text(title).foregroundStyle(.secondary)
             Spacer()
             Text(value).monospacedDigit()
+        }
+    }
+}
+
+extension EffortFeedback {
+    var title: String {
+        switch self {
+        case .easy: "楽だった"
+        case .justRight: "ちょうどいい"
+        case .hard: "きつかった"
         }
     }
 }

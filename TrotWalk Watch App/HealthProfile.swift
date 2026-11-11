@@ -7,10 +7,10 @@ enum HealthProfile {
     /// 安静時心拍が記録されていないときの仮の値
     static let fallbackRestingHeartRate: Double = 65
 
-    static func zones(store: HKHealthStore) async -> HeartRateZones? {
+    static func zones(store: HKHealthStore, briskReserve: Double) async -> HeartRateZones? {
         guard let age = age(store: store) else { return nil }
         let resting = await latestRestingHeartRate(store: store) ?? fallbackRestingHeartRate
-        return HeartRateZones(age: age, restingHeartRate: resting)
+        return HeartRateZones(age: age, restingHeartRate: resting, briskReserve: briskReserve)
     }
 
     static func age(store: HKHealthStore) -> Int? {

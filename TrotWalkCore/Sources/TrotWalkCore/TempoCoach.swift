@@ -2,7 +2,8 @@ import Foundation
 
 /// 歩調（1分あたりの歩数）のテンポを決め、心拍に合わせて少しずつ調整する。
 ///
-/// 振動は2歩に1回（片足が着くたび）鳴らすので、間隔は 120 / 歩調 秒になる。
+/// 振動は1歩ごと（接地ごと）に鳴らすので、間隔は 60 / 歩調 秒になる。
+/// 短い間隔の振動が間引かれる場合に備えて、2歩に1回にもできる。
 /// 心拍の目安がないとき（誕生日が未登録など）は、テンポは固定のまま。
 public struct TempoCoach: Sendable {
     public struct Configuration: Sendable {
@@ -32,10 +33,11 @@ public struct TempoCoach: Sendable {
     private var lastAdjustAt: TimeInterval?
     private var lastSegmentIndex: Int?
 
-    public init(zones: HeartRateZones?, configuration: Configuration = Configuration()) {
+    public init(zones: HeartRateZones?, briskStart: Double? = nil, configuration: Configuration = Configuration()) {
         self.zones = zones
         self.configuration = configuration
-        briskCadence = configuration.briskStart
+        let start = briskStart ?? configuration.briskStart
+        briskCadence = min(max(start, configuration.briskRange.lowerBound), configuration.briskRange.upperBound)
         easyCadence = configuration.easyStart
     }
 
@@ -43,9 +45,10 @@ public struct TempoCoach: Sendable {
         phase == .brisk ? briskCadence : easyCadence
     }
 
-    /// 振動の間隔（秒）。2歩に1回。
-    public func pulseInterval(for phase: WalkPhase) -> TimeInterval {
-        120 / cadence(for: phase)
+    /// 振動の間隔（秒）。
+    /// - Parameter stepsPerPulse: 何歩に1回振動するか（1 か 2）
+    public func pulseInterval(for phase: WalkPhase, stepsPerPulse: Int = 1) -> TimeInterval {
+        60 * Double(max(1, stepsPerPulse)) / cadence(for: phase)
     }
 
     /// 心拍を見てテンポを調整する。

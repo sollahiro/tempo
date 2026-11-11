@@ -27,6 +27,12 @@ struct WatchSettingsView: View {
             Section {
                 Toggle("切り替え10秒前に予告", isOn: $settings.value.switchWarningEnabled)
                 Toggle("歩調テンポ", isOn: $settings.value.tempoEnabled)
+                if settings.value.tempoEnabled {
+                    Picker("振動", selection: $settings.value.stepsPerPulse) {
+                        Text("1歩ごと").tag(1)
+                        Text("2歩に1回").tag(2)
+                    }
+                }
                 Toggle("心拍で自動調整", isOn: $settings.value.intensityGuideEnabled)
             } footer: {
                 Text(guideFooter)
@@ -43,7 +49,10 @@ struct WatchSettingsView: View {
         .task(id: settings.value.intensityGuideEnabled) {
             guard settings.value.intensityGuideEnabled else { return }
             await workout.requestAuthorization()
-            zones = await HealthProfile.zones(store: workout.healthStore)
+            zones = await HealthProfile.zones(
+                store: workout.healthStore,
+                briskReserve: PersonalCalibration.load().briskReserve
+            )
         }
     }
 
@@ -51,14 +60,15 @@ struct WatchSettingsView: View {
         let tempo = settings.value.tempoEnabled
         guard settings.value.intensityGuideEnabled else {
             return tempo
-                ? "2歩に1回、軽い振動でテンポを刻みます。心拍で自動調整をオンにすると、テンポが心拍に合わせて変わります。"
+                ? "接地のタイミングで軽く振動します。心拍で自動調整をオンにすると、テンポが心拍に合わせて変わります。"
                 : "心拍で自動調整をオンにすると、心拍が目安から外れたときだけ振動で知らせます。"
         }
         guard let zones else {
             return "ヘルスケアに誕生日を登録すると、心拍の目安を計算できます。"
         }
         let how = tempo ? "心拍が目安より低ければテンポを上げ、高ければ下げます。" : "目安から外れたときだけ振動で知らせます。"
-        return "速歩の目安は心拍\(Int(zones.briskLowerBound))以上、緩歩は\(Int(zones.easyUpperBound))以下です（推定）。\(how)息が上がって「ややきつい」と感じる体感を優先してください。"
+        let learn = "終了後に「楽だった / きつかった」と答えると、次回の目安が少し変わります。"
+        return "速歩の目安は心拍\(Int(zones.briskLowerBound))以上、緩歩は\(Int(zones.easyUpperBound))以下です（推定）。\(how)\(learn)息が上がって「ややきつい」と感じる体感を優先してください。"
     }
 }
 

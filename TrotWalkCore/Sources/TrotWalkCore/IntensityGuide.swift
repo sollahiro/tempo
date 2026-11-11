@@ -8,22 +8,25 @@ import Foundation
 public struct HeartRateZones: Equatable, Sendable {
     public let restingHeartRate: Double
     public let maxHeartRate: Double
+    /// 速歩の下限にする心拍予備能の割合。初期値 0.70 で、終了後の回答で少しずつ調整する。
+    public let briskReserve: Double
 
     /// 速歩の下限（心拍予備能 70%）
-    public var briskLowerBound: Double { heartRate(atReserve: 0.70) }
-    /// 速歩でこれを超えたら少し落とす（心拍予備能 85%）
-    public var briskUpperBound: Double { heartRate(atReserve: 0.85) }
+    public var briskLowerBound: Double { heartRate(atReserve: briskReserve) }
+    /// 速歩でこれを超えたら少し落とす（下限 + 15%）
+    public var briskUpperBound: Double { heartRate(atReserve: briskReserve + 0.15) }
     /// 緩歩の上限（心拍予備能 40%）
     public var easyUpperBound: Double { heartRate(atReserve: 0.40) }
 
-    public init(restingHeartRate: Double, maxHeartRate: Double) {
+    public init(restingHeartRate: Double, maxHeartRate: Double, briskReserve: Double = PersonalCalibration.defaultBriskReserve) {
         self.restingHeartRate = restingHeartRate
         self.maxHeartRate = max(maxHeartRate, restingHeartRate + 1)
+        self.briskReserve = briskReserve
     }
 
     /// 年齢から最大心拍数を推定する（Tanaka式: 208 - 0.7 × 年齢）。
-    public init(age: Int, restingHeartRate: Double) {
-        self.init(restingHeartRate: restingHeartRate, maxHeartRate: 208 - 0.7 * Double(age))
+    public init(age: Int, restingHeartRate: Double, briskReserve: Double = PersonalCalibration.defaultBriskReserve) {
+        self.init(restingHeartRate: restingHeartRate, maxHeartRate: 208 - 0.7 * Double(age), briskReserve: briskReserve)
     }
 
     public func heartRate(atReserve fraction: Double) -> Double {

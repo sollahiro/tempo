@@ -12,6 +12,8 @@ public struct WalkSettings: Equatable, Codable, Sendable {
     public var switchWarningEnabled: Bool
     /// 歩調のテンポを振動で刻む
     public var tempoEnabled: Bool
+    /// 何歩に1回振動するか（1: 接地ごと、2: 2歩に1回）
+    public var stepsPerPulse: Int
     /// 心拍による強度ガイド。テンポがオンならテンポを自動調整し、オフなら合図で知らせる。
     public var intensityGuideEnabled: Bool
 
@@ -21,13 +23,15 @@ public struct WalkSettings: Equatable, Codable, Sendable {
         sets: Int = 5,
         switchWarningEnabled: Bool = true,
         tempoEnabled: Bool = true,
-        intensityGuideEnabled: Bool = false
+        stepsPerPulse: Int = 1,
+        intensityGuideEnabled: Bool = true
     ) {
         self.briskDuration = briskDuration
         self.easyDuration = easyDuration
         self.sets = sets
         self.switchWarningEnabled = switchWarningEnabled
         self.tempoEnabled = tempoEnabled
+        self.stepsPerPulse = stepsPerPulse
         self.intensityGuideEnabled = intensityGuideEnabled
     }
 

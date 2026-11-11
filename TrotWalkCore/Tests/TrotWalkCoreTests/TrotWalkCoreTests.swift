@@ -132,8 +132,14 @@ final class TempoCoachTests: XCTestCase {
 
     func testPulseInterval() {
         let coach = TempoCoach(zones: nil)
-        XCTAssertEqual(coach.pulseInterval(for: .brisk), 120 / 116, accuracy: 0.0001)
-        XCTAssertEqual(coach.pulseInterval(for: .easy), 120 / 96, accuracy: 0.0001)
+        XCTAssertEqual(coach.pulseInterval(for: .brisk), 60 / 116, accuracy: 0.0001)
+        XCTAssertEqual(coach.pulseInterval(for: .easy), 60 / 96, accuracy: 0.0001)
+        XCTAssertEqual(coach.pulseInterval(for: .brisk, stepsPerPulse: 2), 120 / 116, accuracy: 0.0001)
+    }
+
+    func testStartCadenceFromCalibrationIsClamped() {
+        XCTAssertEqual(TempoCoach(zones: nil, briskStart: 124).briskCadence, 124)
+        XCTAssertEqual(TempoCoach(zones: nil, briskStart: 200).briskCadence, 140)
     }
 
     func testFixedTempoWithoutZones() {
@@ -168,5 +174,47 @@ final class TempoCoachTests: XCTestCase {
         XCTAssertEqual(changes.first?.0, 270)
         XCTAssertTrue(changes.allSatisfy { $0.1 == .slowDown })
         XCTAssertLessThan(coach.easyCadence, 96)
+    }
+}
+
+final class PersonalCalibrationTests: XCTestCase {
+    func testDefaults() {
+        let calibration = PersonalCalibration()
+        XCTAssertEqual(calibration.briskReserve, 0.70)
+        XCTAssertNil(calibration.briskStartCadence)
+    }
+
+    func testEasyRaisesTargetAndKeepsFinalCadence() {
+        let next = PersonalCalibration().updated(feedback: .easy, finalBriskCadence: 124)
+        XCTAssertEqual(next.briskReserve, 0.73, accuracy: 0.0001)
+        XCTAssertEqual(next.briskStartCadence, 124)
+    }
+
+    func testHardLowersTargetAndCadence() {
+        let next = PersonalCalibration().updated(feedback: .hard, finalBriskCadence: 124)
+        XCTAssertEqual(next.briskReserve, 0.67, accuracy: 0.0001)
+        XCTAssertEqual(next.briskStartCadence, 120)
+    }
+
+    func testNoAnswerOnlyRemembersCadence() {
+        let next = PersonalCalibration().updated(feedback: nil, finalBriskCadence: 120)
+        XCTAssertEqual(next.briskReserve, 0.70)
+        XCTAssertEqual(next.briskStartCadence, 120)
+    }
+
+    func testReserveIsClamped() {
+        var calibration = PersonalCalibration()
+        for _ in 0..<20 { calibration = calibration.updated(feedback: .easy, finalBriskCadence: nil) }
+        XCTAssertEqual(calibration.briskReserve, 0.80, accuracy: 0.0001)
+        for _ in 0..<20 { calibration = calibration.updated(feedback: .hard, finalBriskCadence: 100) }
+        XCTAssertEqual(calibration.briskReserve, 0.60, accuracy: 0.0001)
+        XCTAssertEqual(calibration.briskStartCadence, 100)
+    }
+
+    func testZonesUseCalibratedReserve() {
+        let zones = HeartRateZones(restingHeartRate: 60, maxHeartRate: 160, briskReserve: 0.65)
+        XCTAssertEqual(zones.briskLowerBound, 125, accuracy: 0.001)
+        XCTAssertEqual(zones.briskUpperBound, 140, accuracy: 0.001)
+        XCTAssertEqual(zones.easyUpperBound, 100, accuracy: 0.001)
     }
 }

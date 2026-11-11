@@ -44,6 +44,10 @@ final class WorkoutManager: NSObject {
     @ObservationIgnored private var schedule: CueSchedule?
     @ObservationIgnored private var coach: IntensityCoach?
     @ObservationIgnored private var tempo: TempoCoach?
+    /// 終了後に回答を反映するまで、最後の速歩テンポを持っておく
+    @ObservationIgnored private var finalBriskCadence: Double?
+    /// 回答を受け付けたか（終了画面で一度だけ聞く）
+    private(set) var feedbackRecorded = false
     @ObservationIgnored private var metronome: Task<Void, Never>?
     @ObservationIgnored private var lastTick: TimeInterval = 0
     @ObservationIgnored private var currentSegment: IntervalSegment?
@@ -90,10 +94,15 @@ final class WorkoutManager: NSObject {
 
         await requestAuthorization()
 
-        zones = settings.intensityGuideEnabled ? await HealthProfile.zones(store: healthStore) : nil
+        let calibration = PersonalCalibration.load()
+        zones = settings.intensityGuideEnabled
+            ? await HealthProfile.zones(store: healthStore, briskReserve: calibration.briskReserve)
+            : nil
+        feedbackRecorded = false
+        finalBriskCadence = nil
         if settings.tempoEnabled {
             // テンポがオンなら、心拍の目安があるときはテンポそのものを自動調整する
-            tempo = TempoCoach(zones: zones)
+            tempo = TempoCoach(zones: zones, briskStart: calibration.briskStartCadence)
             coach = nil
         } else {
             tempo = nil
@@ -162,9 +171,19 @@ final class WorkoutManager: NSObject {
         session?.end()
     }
 
-    /// 終了画面を閉じてスタートに戻る。
+    /// 終了画面での「速歩はどうでしたか？」の回答。次回の目安心拍とテンポに反映する。
+    func recordFeedback(_ feedback: EffortFeedback?) {
+        guard state == .finished, !feedbackRecorded else { return }
+        feedbackRecorded = true
+        PersonalCalibration.load()
+            .updated(feedback: feedback, finalBriskCadence: finalBriskCadence)
+            .save()
+    }
+
+    /// 終了画面を閉じてスタートに戻る。答えずに閉じた場合も、最後のテンポだけは覚えておく。
     func reset() {
         guard state == .finished else { return }
+        recordFeedback(nil)
         summary = nil
         state = .idle
     }
@@ -244,6 +263,7 @@ final class WorkoutManager: NSObject {
             briskTime: settings.plan.briskTime(upTo: total),
             distanceMeters: distanceMeters
         )
+        finalBriskCadence = tempo?.briskCadence
         cleanUp()
         state = .finished
     }
@@ -274,7 +294,7 @@ final class WorkoutManager: NSObject {
 
     private func currentPulseInterval() -> TimeInterval? {
         guard state == .running, let tempo, let position else { return nil }
-        return tempo.pulseInterval(for: position.segment.phase)
+        return tempo.pulseInterval(for: position.segment.phase, stepsPerPulse: settings.stepsPerPulse)
     }
 
     private func cleanUp() {

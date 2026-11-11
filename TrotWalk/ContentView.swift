@@ -27,6 +27,12 @@ struct ContentView: View {
                     }
                     Toggle("切り替え10秒前に予告", isOn: $settings.value.switchWarningEnabled)
                     Toggle("歩調テンポの振動", isOn: $settings.value.tempoEnabled)
+                    if settings.value.tempoEnabled {
+                        Picker("振動の間隔", selection: $settings.value.stepsPerPulse) {
+                            Text("1歩ごと").tag(1)
+                            Text("2歩に1回").tag(2)
+                        }
+                    }
                     Toggle("心拍で自動調整", isOn: $settings.value.intensityGuideEnabled)
                 } header: {
                     Text("設定")
@@ -38,7 +44,7 @@ struct ContentView: View {
                     HapticRow(title: "速歩の開始", pattern: "上向きに2回")
                     HapticRow(title: "緩歩の開始", pattern: "下向きに1回")
                     HapticRow(title: "切り替え予告", pattern: "通知の振動（10秒前）")
-                    HapticRow(title: "歩調テンポ", pattern: "2歩に1回の軽いクリック")
+                    HapticRow(title: "歩調テンポ", pattern: "接地ごとの軽いクリック")
                     HapticRow(title: "もう少し速く", pattern: "クリック → 上向き（テンポがオフのとき）")
                     HapticRow(title: "少しゆるめて", pattern: "クリック → 下向き（テンポがオフのとき）")
                     HapticRow(title: "完了", pattern: "成功の振動")
@@ -48,6 +54,7 @@ struct ContentView: View {
                     Text("速歩は、息が上がって「ややきつい」と感じるくらい。緩歩は、会話が楽にできるくらいのゆっくり歩きです。")
                     Text("3分ずつが基本ですが、速歩は2分にしても構いません。週に1回15分でも、歩けたら十分です。")
                     Text("歩調テンポは、速歩で毎分116歩、緩歩で96歩から始まります。心拍で自動調整をオンにすると、速歩で心拍が低ければテンポが上がり、高すぎたり緩歩で下がらなかったりすると下がります。上げた速歩のテンポは次のセットにも引き継ぎます。")
+                    Text("ワークアウトの終わりに「速歩はどうでしたか？」と一度だけ聞きます。「楽だった」なら次回の目安を少し上げ、「きつかった」なら少し下げます。答えなくても大丈夫です。")
                     Text("心拍の目安は、年齢と安静時心拍から推定します。体感と違うときは体感を優先してください。")
                 }
 
