@@ -53,6 +53,6 @@ public struct CueSchedule: Sendable {
     /// （古い合図をまとめて鳴らすと混乱するため）。
     public func cue(from previous: TimeInterval, to current: TimeInterval) -> HapticCue? {
         guard current > previous else { return nil }
-        events.last { $0.time > previous && $0.time <= current }?.cue
+        return events.last { $0.time > previous && $0.time <= current }?.cue
     }
 }
