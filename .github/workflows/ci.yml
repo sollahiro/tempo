@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Core tests
+        working-directory: TrotWalkCore
+        run: swift test
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build watchOS app
+        run: |
+          xcodebuild build \
+            -project TrotWalk.xcodeproj \
+            -scheme TrotWalkWatch \
+            -destination 'generic/platform=watchOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO | xcpretty || exit ${PIPESTATUS[0]}
+
+      - name: Build iOS app (with embedded watch app)
+        run: |
+          xcodebuild build \
+            -project TrotWalk.xcodeproj \
+            -scheme TrotWalk \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO | xcpretty || exit ${PIPESTATUS[0]}
