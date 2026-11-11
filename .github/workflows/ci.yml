@@ -26,7 +26,7 @@ jobs:
             -project TrotWalk.xcodeproj \
             -scheme TrotWalkWatch \
             -destination 'generic/platform=watchOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO | xcpretty || exit ${PIPESTATUS[0]}
+            CODE_SIGNING_ALLOWED=NO -quiet
 
       - name: Build iOS app (with embedded watch app)
         run: |
@@ -34,4 +34,4 @@ jobs:
             -project TrotWalk.xcodeproj \
             -scheme TrotWalk \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO | xcpretty || exit ${PIPESTATUS[0]}
+            CODE_SIGNING_ALLOWED=NO -quiet
