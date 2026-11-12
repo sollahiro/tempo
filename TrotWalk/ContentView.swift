@@ -39,7 +39,7 @@ struct ContentView: View {
                 } header: {
                     Text("設定")
                 } footer: {
-                    Text("うち速歩は約\(DurationText.minutes(settings.value.plan.totalBriskDuration))。途中でやめても、そこまでの記録は残ります。設定は Apple Watch にも反映されます。")
+                    Text("うち速歩は約\(DurationText.minutes(settings.value.plan.totalBriskDuration))。途中でやめるときは Watch の ✕ を長押しします。そこまでの記録は残ります。設定は Apple Watch にも反映されます。")
                 }
 
                 Section("振動の合図") {

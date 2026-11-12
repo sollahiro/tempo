@@ -1,11 +1,11 @@
 import SwiftUI
 import TrotWalkCore
+import WatchKit
 
 /// ワークアウト中の画面。基本は見なくてよいが、見たときは色だけで分かるようにする。
 struct WorkoutView: View {
     @Environment(WorkoutManager.self) private var workout
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
-    @State private var confirmingEnd = false
 
     var body: some View {
         let position = workout.position
@@ -43,12 +43,7 @@ struct WorkoutView: View {
                     .primaryHandGesture()
                     .accessibilityLabel(workout.state == .paused ? "再開" : "一時停止")
 
-                    Button(role: .destructive) {
-                        confirmingEnd = true
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel("終了")
+                    HoldToEndButton { workout.end() }
                 }
                 .padding(.top, 4)
                 .disabled(workout.state == .ending)
@@ -56,12 +51,41 @@ struct WorkoutView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(phase.color.opacity(isLuminanceReduced ? 0.25 : 0.8).ignoresSafeArea())
-        .confirmationDialog("ここで終えますか？", isPresented: $confirmingEnd) {
-            Button("終える") { workout.end() }
-            Button("続ける", role: .cancel) {}
-        } message: {
-            Text("途中でも、ここまでの記録は保存されます。")
+    }
+}
+
+/// 長押しで終える終了ボタン。押し間違いだけ防げればよいので、確認画面は出さない。
+/// 押している間リングが満ちて、満ちたら終了する（途中で離せば何も起きない）。
+private struct HoldToEndButton: View {
+    let action: () -> Void
+    private let holdDuration: Double = 0.8
+    @State private var isPressing = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.red.opacity(0.25))
+            Circle()
+                .trim(from: 0, to: isPressing ? 1 : 0)
+                .stroke(Color.red, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(isPressing ? .linear(duration: holdDuration) : .easeOut(duration: 0.15), value: isPressing)
+            Image(systemName: "xmark")
+                .font(.body.bold())
         }
+        .frame(width: 44, height: 44)
+        .contentShape(Circle())
+        .onLongPressGesture(minimumDuration: holdDuration) {
+            WKInterfaceDevice.current().play(.success)
+            action()
+        } onPressingChanged: { pressing in
+            isPressing = pressing
+        }
+        .accessibilityElement()
+        .accessibilityLabel("終了")
+        .accessibilityHint("長押しで終了します。ここまでの記録は保存されます")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action() }
     }
 }
 
