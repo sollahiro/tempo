@@ -1,0 +1,61 @@
+name: HowTo preview
+
+# 使い方アニメーションを iOS シミュレータで動かし、スクリーンショットと動画を成果物に残す。
+on:
+  pull_request:
+    paths:
+      - "TrotWalk/HowTo/**"
+      - ".github/workflows/howto-preview.yml"
+  workflow_dispatch:
+
+jobs:
+  preview:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build for simulator
+        run: |
+          xcodebuild build \
+            -project TrotWalk.xcodeproj \
+            -scheme TrotWalk \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO -quiet
+
+      - name: Capture pages
+        run: |
+          set -x
+          APP=$(find build/Build/Products -maxdepth 2 -name 'TrotWalk.app' -path '*iphonesimulator*' | head -1)
+          BUNDLE=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone 16")))')
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP"
+          mkdir -p preview
+          for mode in light dark; do
+            xcrun simctl ui "$DEVICE" appearance $mode
+            for page in 0 1 2 3 4 5; do
+              xcrun simctl launch "$DEVICE" "$BUNDLE" -HowToStartPage $page
+              sleep 4
+              xcrun simctl io "$DEVICE" screenshot "preview/${mode}-page$((page+1)).png"
+              if [ "$mode" = light ]; then
+                xcrun simctl io "$DEVICE" recordVideo --codec=h264 --force "preview/page$((page+1)).mp4" &
+                REC=$!
+                sleep 8
+                kill -INT $REC
+                wait $REC || true
+              fi
+              xcrun simctl terminate "$DEVICE" "$BUNDLE"
+            done
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: howto-preview
+          path: preview

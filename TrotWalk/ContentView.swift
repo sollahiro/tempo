@@ -4,6 +4,9 @@ import TrotWalkCore
 /// iPhone 側は設定と使い方だけ。ワークアウトは Apple Watch で行う。
 struct ContentView: View {
     @Environment(SettingsStore.self) private var settings
+    @AppStorage("hasSeenHowTo") private var hasSeenHowTo = false
+    @State private var showingHowTo = false
+    @State private var howToStartPage = 0
 
     var body: some View {
         @Bindable var settings = settings
@@ -12,6 +15,10 @@ struct ContentView: View {
             Form {
                 Section {
                     Text("Apple Watch で「歩きはじめる」を押したら、あとは振動の合図に合わせて歩くだけ。画面を見る必要はありません。")
+                    Button("使い方を見る") {
+                        howToStartPage = 0
+                        showingHowTo = true
+                    }
                 } header: {
                     Text("Trot&Walk")
                 }
@@ -65,6 +72,18 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Trot&Walk")
+        }
+        .sheet(isPresented: $showingHowTo) {
+            HowToView(startPage: howToStartPage) { hasSeenHowTo = true }
+        }
+        .onAppear {
+            // 起動引数 -HowToStartPage N で、そのページから使い方を開く（スクリーンショット用）。
+            if UserDefaults.standard.object(forKey: "HowToStartPage") != nil {
+                howToStartPage = UserDefaults.standard.integer(forKey: "HowToStartPage")
+                showingHowTo = true
+            } else if !hasSeenHowTo {
+                showingHowTo = true
+            }
         }
     }
 }
