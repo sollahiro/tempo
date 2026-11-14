@@ -16,7 +16,7 @@ enum Ease {
 
 /// 角度 a（ラジアン。0 が真下、正が前＝右）の方向に長さ len 進んだ点。
 func polar(_ p: CGPoint, _ a: Double, _ len: Double) -> CGPoint {
-    CGPoint(x: p.x + len * sin(a), y: p.y + len * cos(a))
+    CGPoint(x: Double(p.x) + len * sin(a), y: Double(p.y) + len * cos(a))
 }
 
 extension GraphicsContext {
@@ -63,9 +63,10 @@ extension GraphicsContext {
         ctx.opacity = alpha
         for deg in [-140.0, -90.0, -40.0] {
             let a = deg * .pi / 180
-            let r0 = radius + CGFloat(1 - alpha) * 4
-            let p0 = CGPoint(x: c.x + r0 * cos(a), y: c.y + r0 * sin(a))
-            let p1 = CGPoint(x: c.x + (r0 + length) * cos(a), y: c.y + (r0 + length) * sin(a))
+            let r0 = Double(radius) + (1 - alpha) * 4
+            let r1 = r0 + Double(length)
+            let p0 = CGPoint(x: Double(c.x) + r0 * cos(a), y: Double(c.y) + r0 * sin(a))
+            let p1 = CGPoint(x: Double(c.x) + r1 * cos(a), y: Double(c.y) + r1 * sin(a))
             ctx.line(p0, p1, color, width: 3.5)
         }
     }
