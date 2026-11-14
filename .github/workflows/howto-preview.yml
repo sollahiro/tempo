@@ -11,6 +11,7 @@ on:
 jobs:
   preview:
     runs-on: macos-15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -41,14 +42,18 @@ jobs:
           for mode in light dark; do
             xcrun simctl ui "$DEVICE" appearance $mode
             for page in 0 1 2 3 4 5; do
-              xcrun simctl launch "$DEVICE" "$BUNDLE" -HowToStartPage $page
+              timeout 600 xcrun simctl launch "$DEVICE" "$BUNDLE" -HowToStartPage $page
               sleep 4
               xcrun simctl io "$DEVICE" screenshot "preview/${mode}-page$((page+1)).png"
               if [ "$mode" = light ]; then
-                xcrun simctl io "$DEVICE" recordVideo --codec=h264 --force "preview/page$((page+1)).mp4" &
+                # 録画が始まる前に止めると終わらなくなるので、開始のログを待ってから8秒撮る
+                xcrun simctl io "$DEVICE" recordVideo --codec=h264 --force "preview/page$((page+1)).mp4" > rec.log 2>&1 &
                 REC=$!
+                for _ in $(seq 1 60); do grep -q "Recording started" rec.log && break; sleep 0.5; done
                 sleep 8
-                kill -INT $REC
+                kill -INT $REC || true
+                for _ in $(seq 1 30); do kill -0 $REC 2>/dev/null || break; sleep 0.5; done
+                kill -9 $REC 2>/dev/null || true
                 wait $REC || true
               fi
               xcrun simctl terminate "$DEVICE" "$BUNDLE"
