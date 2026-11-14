@@ -36,9 +36,9 @@ struct HowToPage: Identifiable {
         ),
         HowToPage(
             id: 4,
-            title: "切り替えも振動でわかります",
-            body: "速歩に入るときは上向きに2回、緩歩に戻るときは下向きに1回、手首が知らせます。時計を見る必要はありません。",
-            animation: .native(.switchPace)
+            title: "速歩と緩歩は交互にやってきます",
+            body: "速歩の3分が終わると、また緩歩に戻ります。切り替わりも手首の振動でわかるので、時計を見る必要はありません。",
+            animation: .native(.pullBack)
         ),
         HowToPage(
             id: 5,

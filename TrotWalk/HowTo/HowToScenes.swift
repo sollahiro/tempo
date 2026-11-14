@@ -7,7 +7,7 @@ enum HowToScene: CaseIterable {
     case startOnWatch
     case slowWalk
     case briskWalk
-    case switchPace
+    case pullBack
     case repeatSets
 
     /// 「視差効果を減らす」がオンのときに止めて見せる時点。
@@ -17,7 +17,7 @@ enum HowToScene: CaseIterable {
         case .startOnWatch: 2.2
         case .slowWalk: 0.1
         case .briskWalk: 0.1
-        case .switchPace: 3.6
+        case .pullBack: 4.0
         case .repeatSets: 0.2
         }
     }
@@ -28,7 +28,7 @@ enum HowToScene: CaseIterable {
         case .startOnWatch: Self.drawStartOnWatch(ctx, t, p)
         case .slowWalk: Self.drawWalk(ctx, t, p, brisk: false)
         case .briskWalk: Self.drawWalk(ctx, t, p, brisk: true)
-        case .switchPace: Self.drawSwitchPace(ctx, t, p)
+        case .pullBack: Self.drawPullBack(ctx, t, p)
         case .repeatSets: Self.drawRepeatSets(ctx, t, p)
         }
     }
@@ -162,54 +162,66 @@ enum HowToScene: CaseIterable {
         ctx.arc(ringCenter, 22, fraction: t.truncatingRemainder(dividingBy: loop) / loop, color, width: 8)
     }
 
-    // MARK: ⑤ 旗を越えたら切り替わる
+    // MARK: ⑤ ④からカメラが引いて、隣の緩歩が見えてくる
 
-    private static func drawSwitchPace(_ ctx: GraphicsContext, _ time: Double, _ p: HowToPalette) {
-        let loop = 6.4
+    private static func drawPullBack(_ ctx: GraphicsContext, _ time: Double, _ p: HowToPalette) {
+        let loop = 6.8
         let t = time.truncatingRemainder(dividingBy: loop)
-        let switchAt = 3.0
-        let figureX = 140.0
-        ctx.memphisBackdrop(p, blobs: [(CGPoint(x: 70, y: 120), 60, false), (CGPoint(x: 235, y: 120), 60, true)], seed: 4)
+        ctx.memphisBackdrop(p, blobs: [(CGPoint(x: 150, y: 140), 92, true), (CGPoint(x: 250, y: 60), 30, false)], seed: 4)
 
         var c = ctx
-        c.opacity = 1 - Ease.progress(t, 6.0, 6.4)
+        c.opacity = 1 - Ease.progress(t, 6.4, 6.8)
 
-        // 歩調は切り替え時点で連続になるよう積分する
-        let phase = t < switchAt
-            ? slowOmega * t
-            : slowOmega * switchAt + briskOmega * (t - switchAt)
-        let groundOffset = t < switchAt ? 32 * t : 32 * switchAt + 70 * (t - switchAt)
-        // 旗の位置（世界ごと左へ流れる）
-        let flagX = figureX + 32 * switchAt - groundOffset
-        // 旗の右側が速歩の区間、左側が緩歩の区間
-        drawGround(c, p, offset: groundOffset, leftColor: p.slow, rightColor: p.brisk, split: flagX)
+        // 最初は④と同じ構図。そこから引いて、左隣の緩歩の区間まで見せる。
+        let zoom = Ease.inOut(Ease.progress(t, 1.0, 3.2))
+        let scale = Ease.lerp(1, 0.5, zoom)
+        let focus = CGPoint(x: Ease.lerp(150, 0, zoom), y: Ease.lerp(150, 120, zoom))
+        c.translateBy(x: 150, y: 150)
+        c.scaleBy(x: scale, y: scale)
+        c.translateBy(x: -focus.x, y: -focus.y)
 
-        // 点線と旗
-        var y = 70.0
+        // 地面: 左が緩歩（青）、右が速歩（オレンジ）
+        c.line(CGPoint(x: -290, y: groundY), CGPoint(x: -4, y: groundY), p.slow, width: 5)
+        c.line(CGPoint(x: 4, y: groundY), CGPoint(x: 288, y: groundY), p.brisk, width: 5)
+        func dashes(from x0: Double, to x1: Double, offset: Double) {
+            let spacing = 46.0
+            var x = x0 + 6 - offset.truncatingRemainder(dividingBy: spacing)
+            while x < x1 - 16 {
+                if x > x0 + 2 {
+                    c.line(CGPoint(x: x, y: groundY + 18), CGPoint(x: x + 16, y: groundY + 18), p.ground.opacity(0.35), width: 4)
+                }
+                x += spacing
+            }
+        }
+        dashes(from: -290, to: 0, offset: t * 32)
+        dashes(from: 0, to: 290, offset: t * 70)
+
+        // 区切りの点線と旗
+        var y = 60.0
         while y < groundY + 30 {
-            c.line(CGPoint(x: flagX, y: y), CGPoint(x: flagX, y: y + 8), p.ground.opacity(0.5), width: 3)
+            c.line(CGPoint(x: 0, y: y), CGPoint(x: 0, y: y + 8), p.ground.opacity(0.5), width: 3)
             y += 16
         }
-        c.line(CGPoint(x: flagX, y: 70), CGPoint(x: flagX, y: groundY), p.ground, width: 4)
+        c.line(CGPoint(x: 0, y: 60), CGPoint(x: 0, y: groundY), p.ground, width: 4)
         var flag = Path()
-        flag.move(to: CGPoint(x: flagX + 2, y: 70))
-        flag.addLine(to: CGPoint(x: flagX + 36, y: 84))
-        flag.addLine(to: CGPoint(x: flagX + 2, y: 98))
+        flag.move(to: CGPoint(x: 2, y: 60))
+        flag.addLine(to: CGPoint(x: 36, y: 74))
+        flag.addLine(to: CGPoint(x: 2, y: 88))
         flag.closeSubpath()
-        c.fill(flag, with: .color(p.brisk))
+        c.fill(flag, with: .color(p.cap))
 
-        let u = Ease.inOut(Ease.progress(t, switchAt, switchAt + 0.5))
-        let pose = WalkerPose.blend(.slow(phase: phase), .brisk(phase: phase), u)
-        let color = t < switchAt ? p.slow : p.brisk
-        let r = Walker.draw(c, colors: WalkerColors(p), ground: CGPoint(x: figureX, y: groundY), pose: pose, watch: (screen: color, p: p))
-        c.buzz(at: r.wrist, color, alpha: pose.stepPulse, radius: 14)
+        // 2人がそれぞれの区間を歩く
+        let slowPose = WalkerPose.slow(phase: slowOmega * t)
+        let briskPose = WalkerPose.brisk(phase: briskOmega * t)
+        let rs = Walker.draw(c, colors: WalkerColors(p), ground: CGPoint(x: -150, y: groundY), pose: slowPose, watch: (screen: p.slow, p: p))
+        c.buzz(at: rs.wrist, p.slow, alpha: slowPose.stepPulse, radius: 14)
+        let rb = Walker.draw(c, colors: WalkerColors(p), ground: CGPoint(x: 145, y: groundY), pose: briskPose, watch: (screen: p.brisk, p: p))
+        c.buzz(at: rb.wrist, p.brisk, alpha: briskPose.stepPulse, radius: 14)
 
-        // 切り替えの瞬間は、手首から大きく波紋
-        let burst = Ease.progress(t, switchAt, switchAt + 0.6)
-        if burst > 0, burst < 1 {
-            var b = c
-            b.opacity = c.opacity * (1 - burst)
-            b.ring(r.wrist, 8 + 40 * burst, p.brisk, width: 5)
+        // 時間の円も④と同じ位置から
+        for (center, color, length) in [(CGPoint(x: 248, y: 58), p.brisk, 5.0), (CGPoint(x: -52, y: 58), p.slow, 6.0)] {
+            c.ring(center, 22, color.opacity(0.22), width: 8)
+            c.arc(center, 22, fraction: t.truncatingRemainder(dividingBy: length) / length, color, width: 8)
         }
     }
 
