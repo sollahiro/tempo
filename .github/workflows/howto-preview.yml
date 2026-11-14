@@ -42,7 +42,7 @@ jobs:
           for mode in light dark; do
             xcrun simctl ui "$DEVICE" appearance $mode
             for page in 0 1 2 3 4 5; do
-              timeout 600 xcrun simctl launch "$DEVICE" "$BUNDLE" -HowToStartPage $page
+              xcrun simctl launch "$DEVICE" "$BUNDLE" -HowToStartPage $page
               sleep 4
               xcrun simctl io "$DEVICE" screenshot "preview/${mode}-page$((page+1)).png"
               if [ "$mode" = light ]; then
