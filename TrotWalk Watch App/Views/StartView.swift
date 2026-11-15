@@ -21,13 +21,6 @@ struct StartView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
 
-                    Picker("時間", selection: $settings.value.totalDuration) {
-                        ForEach(IntervalPlan.durationOptions, id: \.self) { seconds in
-                            Text(DurationText.minutes(seconds)).tag(seconds)
-                        }
-                    }
-                    .pickerStyle(.navigationLink)
-
                     Text(planText)
                         .font(.footnote)
                         .multilineTextAlignment(.center)
@@ -53,6 +46,6 @@ struct StartView: View {
 
     private var planText: String {
         let plan = settings.value.plan
-        return "速歩\(DurationText.minutes(plan.briskDuration))と緩歩\(DurationText.minutes(plan.easyDuration))をくり返します。途中でやめても大丈夫です。"
+        return "速歩\(DurationText.minutes(plan.briskDuration))と緩歩\(DurationText.minutes(plan.easyDuration))を、終えるまでくり返します。"
     }
 }

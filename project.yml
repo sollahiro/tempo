@@ -71,6 +71,8 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: $(APP_BUNDLE_ID)
         WKBackgroundModes: [workout-processing]
+        NSLocationWhenInUseUsageDescription: 歩いたルートをワークアウトの記録に残します。
+        NSMotionUsageDescription: 立ち止まったことを検知して、ワークアウトを自動で一時停止・再開します。
         NSHealthShareUsageDescription: 心拍数と安静時心拍、年齢を読み取り、速歩と緩歩の目安を計算します。
         NSHealthUpdateUsageDescription: ウォーキングのワークアウトをフィットネスとヘルスケアに保存します。
     settings:

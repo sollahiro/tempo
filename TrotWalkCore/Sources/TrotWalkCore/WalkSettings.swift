@@ -6,41 +6,45 @@ public struct WalkSettings: Equatable, Codable, Sendable {
     public var briskDuration: TimeInterval
     /// 緩歩の長さ（秒）
     public var easyDuration: TimeInterval
-    /// ワークアウトの長さ（秒）。20〜60分、10分刻み。
-    public var totalDuration: TimeInterval
-    /// 切り替え10秒前の予告
+    /// 切り替え10秒前・5秒前の予告
     public var switchWarningEnabled: Bool
+    /// 30分（おすすめの目安）に届いたら一度だけ知らせる
+    public var recommendedNoticeEnabled: Bool
+    /// 立ち止まったら自動で一時停止し、歩き出したら再開する
+    public var autoPauseEnabled: Bool
     /// 歩調のテンポを振動で刻む
     public var tempoEnabled: Bool
-    /// 何歩に1回振動するか（1: 接地ごと、2: 2歩に1回）
-    public var stepsPerPulse: Int
     /// 心拍による強度ガイド。テンポがオンならテンポを自動調整し、オフなら合図で知らせる。
     public var intensityGuideEnabled: Bool
 
     public init(
         briskDuration: TimeInterval = 180,
         easyDuration: TimeInterval = 180,
-        totalDuration: TimeInterval = 30 * 60,
         switchWarningEnabled: Bool = true,
+        recommendedNoticeEnabled: Bool = true,
+        autoPauseEnabled: Bool = true,
         tempoEnabled: Bool = true,
-        stepsPerPulse: Int = 1,
         intensityGuideEnabled: Bool = true
     ) {
         self.briskDuration = briskDuration
         self.easyDuration = easyDuration
-        self.totalDuration = totalDuration
         self.switchWarningEnabled = switchWarningEnabled
+        self.recommendedNoticeEnabled = recommendedNoticeEnabled
+        self.autoPauseEnabled = autoPauseEnabled
         self.tempoEnabled = tempoEnabled
-        self.stepsPerPulse = stepsPerPulse
         self.intensityGuideEnabled = intensityGuideEnabled
     }
 
     public var plan: IntervalPlan {
-        IntervalPlan(briskDuration: briskDuration, easyDuration: easyDuration, totalDuration: totalDuration)
+        IntervalPlan(briskDuration: briskDuration, easyDuration: easyDuration)
     }
 
     public var cueSchedule: CueSchedule {
-        CueSchedule(plan: plan, warningLead: switchWarningEnabled ? CueSchedule.defaultWarningLead : 0)
+        CueSchedule(
+            plan: plan,
+            warningsEnabled: switchWarningEnabled,
+            milestone: recommendedNoticeEnabled ? IntervalPlan.recommendedDuration : nil
+        )
     }
 }
 
