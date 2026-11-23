@@ -2,98 +2,81 @@ import XCTest
 @testable import TrotWalkCore
 
 final class IntervalPlanTests: XCTestCase {
-    func testStandardPlanIs30MinutesWith15MinutesBrisk() {
+    func testSegmentsAlternateWithoutEnd() {
         let plan = IntervalPlan.standard
-        XCTAssertEqual(plan.totalDuration, 30 * 60)
-        XCTAssertEqual(plan.totalBriskDuration, 15 * 60)
-        XCTAssertEqual(plan.segments.count, 10)
-        XCTAssertEqual(plan.segments.first?.phase, .brisk)
-        XCTAssertEqual(plan.segments.last?.phase, .easy)
-    }
-
-    func testDurationOptions() {
-        XCTAssertEqual(IntervalPlan.durationOptions, [1200, 1800, 2400, 3000, 3600])
-    }
-
-    func testEveryOptionEndsExactlyOnTimeWithEasyWalking() {
-        for brisk in IntervalPlan.briskOptions {
-            for total in IntervalPlan.durationOptions {
-                let plan = IntervalPlan(briskDuration: brisk, easyDuration: 180, totalDuration: total)
-                XCTAssertEqual(plan.segments.last?.end, total)
-                XCTAssertEqual(plan.segments.last?.phase, .easy)
-                // 区間は隙間なく続く
-                for (a, b) in zip(plan.segments, plan.segments.dropFirst()) {
-                    XCTAssertEqual(a.end, b.start)
-                    XCTAssertNotEqual(a.phase, b.phase)
-                }
-            }
+        XCTAssertEqual(plan.setDuration, 360)
+        XCTAssertEqual(plan.segment(index: 0).phase, .brisk)
+        XCTAssertEqual(plan.segment(index: 1).phase, .easy)
+        XCTAssertEqual(plan.segment(index: 101).start, 50 * 360 + 180)
+        XCTAssertEqual(plan.segment(index: 101).setNumber, 51)
+        for i in 0..<50 {
+            XCTAssertEqual(plan.segment(index: i).end, plan.segment(index: i + 1).start)
         }
-    }
-
-    func test20MinutesWith3MinuteBriskAddsShortSet() {
-        let plan = IntervalPlan(briskDuration: 180, easyDuration: 180, totalDuration: 1200)
-        XCTAssertEqual(plan.setCount, 4)
-        XCTAssertEqual(plan.segments.suffix(2).map(\.duration), [60, 60])
-        XCTAssertEqual(plan.totalBriskDuration, 600)
-    }
-
-    func test20MinutesWith2MinuteBriskIsFourFullSets() {
-        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, totalDuration: 1200)
-        XCTAssertEqual(plan.setCount, 4)
-        XCTAssertEqual(plan.totalBriskDuration, 480)
-    }
-
-    func testSmallRemainderExtendsLastEasy() {
-        let plan = IntervalPlan(briskDuration: 180, easyDuration: 180, totalDuration: 1800 + 60)
-        XCTAssertEqual(plan.setCount, 5)
-        XCTAssertEqual(plan.segments.last?.duration, 240)
     }
 
     func testPositionMatchesSegments() {
-        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, totalDuration: 900)
-        for segment in plan.segments {
-            let mid = segment.start + segment.duration / 2
-            XCTAssertEqual(plan.position(at: mid)?.segment, segment)
+        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180)
+        for i in 0..<20 {
+            let segment = plan.segment(index: i)
             XCTAssertEqual(plan.position(at: segment.start)?.segment, segment)
+            XCTAssertEqual(plan.position(at: segment.start + segment.duration / 2)?.segment, segment)
         }
         XCTAssertEqual(plan.position(at: 130)?.segment.phase, .easy)
         XCTAssertEqual(plan.position(at: 130)?.remainingInSegment, 170)
-        XCTAssertNil(plan.position(at: plan.totalDuration))
+        XCTAssertNotNil(plan.position(at: 10 * 3600))
         XCTAssertNil(plan.position(at: -1))
     }
 
     func testBriskTimeUpTo() {
-        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180, totalDuration: 900)
+        let plan = IntervalPlan(briskDuration: 120, easyDuration: 180)
+        XCTAssertEqual(plan.briskTime(upTo: 0), 0)
         XCTAssertEqual(plan.briskTime(upTo: 60), 60)
         XCTAssertEqual(plan.briskTime(upTo: 200), 120)
         XCTAssertEqual(plan.briskTime(upTo: 330), 150)
-        XCTAssertEqual(plan.briskTime(upTo: 10_000), 360)
+        XCTAssertEqual(plan.briskTime(upTo: 900), 360)
     }
 }
 
 final class CueScheduleTests: XCTestCase {
-    let plan = IntervalPlan(briskDuration: 180, easyDuration: 180, totalDuration: 720)
+    let plan = IntervalPlan(briskDuration: 180, easyDuration: 180)
 
-    func testCuesAtBoundaries() {
-        let schedule = CueSchedule(plan: plan)
-        XCTAssertNil(schedule.cue(from: 0, to: 1))
-        XCTAssertEqual(schedule.cue(from: 169, to: 170), .switchSoon)
-        XCTAssertEqual(schedule.cue(from: 179, to: 180), .easyStart)
-        XCTAssertEqual(schedule.cue(from: 359, to: 360), .briskStart)
-        XCTAssertEqual(schedule.cue(from: 719, to: 720), .finished)
-        XCTAssertNil(schedule.cue(from: 720, to: 721))
+    func testCuesAroundSwitch() {
+        let schedule = CueSchedule(plan: plan, milestone: nil)
+        XCTAssertEqual(schedule.cues(from: 0, to: 1), [])
+        XCTAssertEqual(schedule.cues(from: 169, to: 170), [.switchSoon])
+        XCTAssertEqual(schedule.cues(from: 174, to: 175), [.switchVerySoon])
+        XCTAssertEqual(schedule.cues(from: 179, to: 180), [.easyStart])
+        XCTAssertEqual(schedule.cues(from: 359, to: 360), [.briskStart])
+        // 終わりはなく、ずっと続く
+        XCTAssertEqual(schedule.cues(from: 7199, to: 7200), [.briskStart])
     }
 
-    func testLargeJumpReturnsOnlyLatestCue() {
-        let schedule = CueSchedule(plan: plan)
-        // 予告と緩歩開始の両方をまたいだら、緩歩開始だけ
-        XCTAssertEqual(schedule.cue(from: 160, to: 200), .easyStart)
+    func testLargeJumpReturnsOnlyLatestSwitchCue() {
+        let schedule = CueSchedule(plan: plan, milestone: nil)
+        XCTAssertEqual(schedule.cues(from: 160, to: 200), [.easyStart])
+        XCTAssertEqual(schedule.cues(from: 160, to: 176), [.switchVerySoon])
     }
 
-    func testWarningCanBeDisabled() {
-        let schedule = CueSchedule(plan: plan, warningLead: 0)
-        XCTAssertNil(schedule.cue(from: 169, to: 171))
-        XCTAssertFalse(schedule.events.contains { $0.cue == .switchSoon })
+    func testWarningsCanBeDisabled() {
+        let schedule = CueSchedule(plan: plan, warningsEnabled: false, milestone: nil)
+        XCTAssertEqual(schedule.cues(from: 165, to: 179), [])
+        XCTAssertEqual(schedule.cues(from: 179, to: 180), [.easyStart])
+    }
+
+    func testRecommendedMilestoneOnceAlongsideSwitch() {
+        let schedule = CueSchedule(plan: plan)
+        // 30分ちょうどは速歩の開始とも重なる
+        XCTAssertEqual(schedule.cues(from: 1799, to: 1800), [.briskStart, .recommendedReached])
+        XCTAssertEqual(schedule.cues(from: 1800, to: 1801), [])
+        XCTAssertEqual(schedule.cues(from: 3599, to: 3600), [.briskStart])
+    }
+}
+
+final class TempoPatternTests: XCTestCase {
+    func testFourOnFourOff() {
+        let pattern = (0..<16).map(TempoCoach.isPulseBeat)
+        XCTAssertEqual(pattern, [true, true, true, true, false, false, false, false,
+                                 true, true, true, true, false, false, false, false])
     }
 }
 

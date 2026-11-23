@@ -12,7 +12,7 @@ struct WorkoutView: View {
         let phase = position?.segment.phase ?? .easy
 
         VStack(spacing: 4) {
-            Text(workout.state == .paused ? "一時停止中" : phase.title)
+            Text(workout.state == .paused ? (workout.isAutoPaused ? "止まっています" : "一時停止中") : phase.title)
                 .font(.title3.bold())
 
             Text(DurationText.clock(position?.remainingInSegment ?? 0))
@@ -21,7 +21,7 @@ struct WorkoutView: View {
 
             HStack(spacing: 10) {
                 if let position {
-                    Text("\(position.segment.setNumber)/\(workout.plan.setCount)")
+                    Text("\(position.segment.setNumber)セット目")
                 }
                 if let heartRate = workout.heartRate {
                     Label("\(Int(heartRate))", systemImage: "heart.fill")

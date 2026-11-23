@@ -1,3 +1,5 @@
+import CoreLocation
+import CoreMotion
 import Foundation
 import HealthKit
 import Observation
@@ -11,7 +13,8 @@ struct WorkoutSummary: Equatable {
 }
 
 /// HealthKit のワークアウトセッションを動かし、時間に合わせて振動を鳴らす。
-/// 記録は屋外ウォーキングとして Fitness と Health に保存される。
+/// 記録は屋外ウォーキングとして Fitness と Health に保存される（GPS のルートつき）。
+/// 終わりの時間は決めず、終えるまで速歩と緩歩をくり返す。
 @MainActor
 @Observable
 final class WorkoutManager: NSObject {
@@ -35,6 +38,8 @@ final class WorkoutManager: NSObject {
     private(set) var zones: HeartRateZones?
     /// 今の歩調テンポ（歩/分）。テンポがオフなら nil。
     private(set) var cadence: Double?
+    /// 立ち止まったことで自動的に一時停止しているか
+    private(set) var isAutoPaused = false
     private(set) var summary: WorkoutSummary?
     private(set) var errorMessage: String?
 
@@ -57,6 +62,9 @@ final class WorkoutManager: NSObject {
     @ObservationIgnored private var lastTick: TimeInterval = 0
     @ObservationIgnored private var currentSegment: IntervalSegment?
     @ObservationIgnored private var currentSegmentStart: Date?
+    private let pedometer = CMPedometer()
+    private let locationManager = CLLocationManager()
+    @ObservationIgnored private var routeBuilder: HKWorkoutRouteBuilder?
     private let haptics = HapticPlayer()
 
     // MARK: - 権限
@@ -65,6 +73,7 @@ final class WorkoutManager: NSObject {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let toShare: Set<HKSampleType> = [
             HKObjectType.workoutType(),
+            HKSeriesType.workoutRoute(),
             HKQuantityType(.heartRate),
             HKQuantityType(.activeEnergyBurned),
             HKQuantityType(.distanceWalkingRunning),
@@ -96,6 +105,7 @@ final class WorkoutManager: NSObject {
         countdownCancelled = false
         elapsed = 0
         lastTick = 0
+        isAutoPaused = false
         heartRate = nil
         distanceMeters = nil
         summary = nil
@@ -149,15 +159,16 @@ final class WorkoutManager: NSObject {
                 HKMetadataKeyIndoorWorkout: false,
                 MetadataKey.briskSeconds: settings.briskDuration,
                 MetadataKey.easySeconds: settings.easyDuration,
-                MetadataKey.plannedMinutes: Int(settings.totalDuration / 60),
             ])
 
-            currentSegment = plan.segments.first
+            currentSegment = plan.segment(index: 0)
             currentSegmentStart = startDate
             state = .running
             haptics.play(.briskStart)
             startTicker()
             startMetronome()
+            startRoute()
+            if settings.autoPauseEnabled { startAutoPause() }
         } catch {
             errorMessage = "ワークアウトを開始できませんでした"
             session?.end()
@@ -190,6 +201,8 @@ final class WorkoutManager: NSObject {
     }
 
     func togglePause() {
+        // 手で操作したら、自動の一時停止・再開は次に立ち止まるまで任せない
+        isAutoPaused = false
         switch state {
         case .running:
             session?.pause()
@@ -202,12 +215,14 @@ final class WorkoutManager: NSObject {
         }
     }
 
-    /// 途中で終える、またはプランが終わったときに呼ぶ。記録は保存される。
+    /// 終えるときに呼ぶ。記録は保存される。
     func end() {
         guard state == .running || state == .paused else { return }
         state = .ending
         ticker?.cancel()
         metronome?.cancel()
+        pedometer.stopEventUpdates()
+        locationManager.stopUpdatingLocation()
         recordCurrentSegment(endingAt: Date())
         session?.end()
     }
@@ -248,13 +263,8 @@ final class WorkoutManager: NSObject {
         elapsed = now
         defer { lastTick = now }
 
-        if let cue = schedule?.cue(from: lastTick, to: now) {
-            if cue == .finished {
-                haptics.play(.finished)
-                end()
-                return
-            }
-            haptics.play(cue)
+        if let cues = schedule?.cues(from: lastTick, to: now), !cues.isEmpty {
+            haptics.play(cues)
         } else if let position, let heartRate,
                   let cue = coach?.evaluate(heartRate: heartRate, position: position, now: now) {
             haptics.play(cue)
@@ -295,7 +305,9 @@ final class WorkoutManager: NSObject {
         let total = builder.elapsedTime
         do {
             try await builder.endCollection(at: date)
-            _ = try await builder.finishWorkout()
+            if let workout = try await builder.finishWorkout(), let routeBuilder {
+                _ = try? await routeBuilder.finishRoute(with: workout, metadata: nil)
+            }
         } catch {
             errorMessage = "記録の保存に失敗しました"
         }
@@ -309,33 +321,94 @@ final class WorkoutManager: NSObject {
         state = .finished
     }
 
-    /// 歩調テンポの振動を刻む。間隔は毎拍、今のフェーズとテンポから決め直す。
+    /// 歩調テンポの振動を刻む。1歩ごとに1拍で、4歩鳴らして4歩休む。
+    /// 間隔は毎拍、今のフェーズとテンポから決め直す。区間が変わったら数え直す。
     private func startMetronome() {
         metronome?.cancel()
         guard tempo != nil else { return }
         metronome = Task { [weak self] in
             let clock = ContinuousClock()
             var next = clock.now
+            var beat = 0
+            var segmentIndex: Int?
             while !Task.isCancelled {
-                guard let interval = self?.currentPulseInterval() else {
-                    // 一時停止中など。再開したらその時点から刻み直す
+                guard let current = self?.currentBeat() else {
+                    // 一時停止中や切り替え直前。再開したらその時点から刻み直す
                     try? await clock.sleep(for: .milliseconds(250))
                     next = clock.now
+                    beat = 0
                     continue
                 }
-                next = max(next.advanced(by: .seconds(interval)), clock.now)
+                if current.segmentIndex != segmentIndex {
+                    segmentIndex = current.segmentIndex
+                    beat = 0
+                }
+                next = max(next.advanced(by: .seconds(current.interval)), clock.now)
                 try? await clock.sleep(until: next)
                 if Task.isCancelled { return }
-                if self?.currentPulseInterval() != nil {
+                if self?.currentBeat() != nil, TempoCoach.isPulseBeat(beat) {
                     self?.haptics.tempoTick()
                 }
+                beat += 1
             }
         }
     }
 
-    private func currentPulseInterval() -> TimeInterval? {
+    /// 今の拍の間隔と区間番号。テンポを鳴らさない時間なら nil。
+    private func currentBeat() -> (interval: TimeInterval, segmentIndex: Int)? {
         guard state == .running, let tempo, let position else { return nil }
-        return tempo.pulseInterval(for: position.segment.phase, stepsPerPulse: settings.stepsPerPulse)
+        // 5秒前の小刻みな振動と混ざらないよう、切り替え直前はテンポを止める
+        if settings.switchWarningEnabled, position.remainingInSegment <= CueSchedule.finalWarningLead + 0.5 {
+            return nil
+        }
+        return (interval: tempo.pulseInterval(for: position.segment.phase), segmentIndex: position.segment.index)
+    }
+
+    // MARK: - 立ち止まったら自動で一時停止
+
+    private func startAutoPause() {
+        guard CMPedometer.isPedometerEventTrackingAvailable() else { return }
+        pedometer.startEventUpdates { [weak self] event, _ in
+            guard let type = event?.type else { return }
+            Task { @MainActor in self?.handlePedometerEvent(type) }
+        }
+    }
+
+    private func handlePedometerEvent(_ type: CMPedometerEventType) {
+        switch type {
+        case .pause where state == .running:
+            isAutoPaused = true
+            session?.pause()
+            haptics.play(.paused)
+        case .resume where state == .paused && isAutoPaused:
+            isAutoPaused = false
+            session?.resume()
+            haptics.play(.resumed)
+        default:
+            break
+        }
+    }
+
+    // MARK: - GPS ルート
+
+    private func startRoute() {
+        routeBuilder = HKWorkoutRouteBuilder(healthStore: healthStore, device: nil)
+        locationManager.delegate = self
+        locationManager.activityType = .fitness
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = 5
+        if locationManager.authorizationStatus == .notDetermined {
+            locationManager.requestWhenInUseAuthorization()
+        }
+        locationManager.startUpdatingLocation()
+    }
+
+    fileprivate func addRoute(_ locations: [CLLocation]) {
+        guard let routeBuilder, state == .running else { return }
+        // 精度の低い点は捨てる
+        let usable = locations.filter { $0.horizontalAccuracy > 0 && $0.horizontalAccuracy <= 50 }
+        guard !usable.isEmpty else { return }
+        routeBuilder.insertRouteData(usable) { _, _ in }
     }
 
     private func cleanUp() {
@@ -343,6 +416,10 @@ final class WorkoutManager: NSObject {
         ticker = nil
         metronome?.cancel()
         metronome = nil
+        pedometer.stopEventUpdates()
+        locationManager.stopUpdatingLocation()
+        routeBuilder = nil
+        isAutoPaused = false
         tempo = nil
         session = nil
         builder = nil
@@ -385,7 +462,16 @@ enum MetadataKey {
     static let setNumber = "TrotWalkSet"
     static let briskSeconds = "TrotWalkBriskSeconds"
     static let easySeconds = "TrotWalkEasySeconds"
-    static let plannedMinutes = "TrotWalkPlannedMinutes"
+}
+
+// MARK: - CLLocationManagerDelegate
+
+extension WorkoutManager: CLLocationManagerDelegate {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        Task { @MainActor in self.addRoute(locations) }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
 // MARK: - HKWorkoutSessionDelegate

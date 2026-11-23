@@ -17,25 +17,16 @@ struct WatchSettingsView: View {
                         Text(DurationText.minutes(seconds)).tag(seconds)
                     }
                 }
-                Picker("時間", selection: $settings.value.totalDuration) {
-                    ForEach(IntervalPlan.durationOptions, id: \.self) { seconds in
-                        Text(DurationText.minutes(seconds)).tag(seconds)
-                    }
-                }
             } footer: {
-                Text("速歩の合計 \(DurationText.minutes(settings.value.plan.totalBriskDuration))")
+                Text("終わりの時間は決めません。目安は30分以上ですが、いつ終えても大丈夫です。")
             }
 
             Section {
-                Toggle("切り替え10秒前に予告", isOn: $settings.value.switchWarningEnabled)
+                Toggle("切り替え前の予告", isOn: $settings.value.switchWarningEnabled)
                 Toggle("歩調テンポ", isOn: $settings.value.tempoEnabled)
-                if settings.value.tempoEnabled {
-                    Picker("振動", selection: $settings.value.stepsPerPulse) {
-                        Text("1歩ごと").tag(1)
-                        Text("2歩に1回").tag(2)
-                    }
-                }
                 Toggle("心拍で自動調整", isOn: $settings.value.intensityGuideEnabled)
+                Toggle("止まったら一時停止", isOn: $settings.value.autoPauseEnabled)
+                Toggle("30分で知らせる", isOn: $settings.value.recommendedNoticeEnabled)
             } footer: {
                 Text(guideFooter)
             }
@@ -45,6 +36,9 @@ struct WatchSettingsView: View {
                     Button(sample.title) { haptics.play(sample.cue) }
                 }
                 Button("歩調テンポ") { haptics.tempoTick() }
+                Text("振動が弱いときは、iPhone の Watch アプリ →「サウンドと触覚」で「はっきり」を選ぶと強くなります。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("設定")
@@ -62,7 +56,7 @@ struct WatchSettingsView: View {
         let tempo = settings.value.tempoEnabled
         guard settings.value.intensityGuideEnabled else {
             return tempo
-                ? "接地のタイミングで軽く振動します。心拍で自動調整をオンにすると、テンポが心拍に合わせて変わります。"
+                ? "接地のタイミングで振動します。4歩鳴って4歩休む、をくり返します。心拍で自動調整をオンにすると、テンポが心拍に合わせて変わります。"
                 : "心拍で自動調整をオンにすると、心拍が目安から外れたときだけ振動で知らせます。"
         }
         guard let zones else {
@@ -79,11 +73,10 @@ struct HapticSample {
     let cue: HapticCue
 
     static let all: [HapticSample] = [
-        HapticSample(title: "速歩の開始", cue: .briskStart),
-        HapticSample(title: "緩歩の開始", cue: .easyStart),
-        HapticSample(title: "切り替え予告", cue: .switchSoon),
-        HapticSample(title: "もう少し速く", cue: .speedUp),
-        HapticSample(title: "少しゆるめて", cue: .slowDown),
-        HapticSample(title: "完了", cue: .finished),
+        HapticSample(title: "切り替え10秒前・切り替え", cue: .switchSoon),
+        HapticSample(title: "切り替え5秒前", cue: .switchVerySoon),
+        HapticSample(title: "30分の目安", cue: .recommendedReached),
+        HapticSample(title: "一時停止", cue: .paused),
+        HapticSample(title: "再開", cue: .resumed),
     ]
 }

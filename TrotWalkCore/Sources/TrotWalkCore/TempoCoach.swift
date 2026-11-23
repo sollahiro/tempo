@@ -3,7 +3,7 @@ import Foundation
 /// 歩調（1分あたりの歩数）のテンポを決め、心拍に合わせて少しずつ調整する。
 ///
 /// 振動は1歩ごと（接地ごと）に鳴らすので、間隔は 60 / 歩調 秒になる。
-/// 短い間隔の振動が間引かれる場合に備えて、2歩に1回にもできる。
+/// ずっと鳴り続けないよう「4歩振動して4歩休む」をくり返す（`isPulseBeat`）。
 /// 心拍の目安がないとき（誕生日が未登録など）は、テンポは固定のまま。
 public struct TempoCoach: Sendable {
     public struct Configuration: Sendable {
@@ -39,6 +39,14 @@ public struct TempoCoach: Sendable {
         let start = briskStart ?? configuration.briskStart
         briskCadence = min(max(start, configuration.briskRange.lowerBound), configuration.briskRange.upperBound)
         easyCadence = configuration.easyStart
+    }
+
+    public static let beatsOn = 4
+    public static let beatsOff = 4
+
+    /// beat 番目（0 始まり）の歩で振動するか。4歩振動、4歩休み。
+    public static func isPulseBeat(_ beat: Int) -> Bool {
+        beat >= 0 && beat % (beatsOn + beatsOff) < beatsOn
     }
 
     public func cadence(for phase: WalkPhase) -> Double {
