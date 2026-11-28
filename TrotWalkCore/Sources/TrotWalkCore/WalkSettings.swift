@@ -6,7 +6,7 @@ public struct WalkSettings: Equatable, Codable, Sendable {
     public var briskDuration: TimeInterval
     /// 緩歩の長さ（秒）
     public var easyDuration: TimeInterval
-    /// 切り替え10秒前・5秒前の予告
+    /// 切り替え5秒前の予告
     public var switchWarningEnabled: Bool
     /// 30分（おすすめの目安）に届いたら一度だけ知らせる
     public var recommendedNoticeEnabled: Bool

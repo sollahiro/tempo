@@ -9,10 +9,10 @@ import WatchKit
 ///
 /// | 合図                 | 振動                               |
 /// |----------------------|------------------------------------|
-/// | 切り替え10秒前       | 長い振動                           |
-/// | 切り替え5秒前        | 小刻みな振動                       |
+/// | 切り替え5秒前        | 強く長い振動                       |
 /// | 切り替え（速歩/緩歩）| 長い振動                           |
 /// | 歩調テンポ           | 1歩ごとに強めのタップ、4歩鳴って4歩休む |
+/// | 切り替え直後・再開後 | 最初の4歩はテンポをさらに強く      |
 /// | 30分の目安           | 成功                               |
 /// | 一時停止 / 再開      | 停止 / 開始                        |
 /// | 終了                 | 成功                               |
@@ -65,12 +65,18 @@ final class HapticPlayer {
     }
 
     /// 歩調テンポの1拍。合図と重なるときは鳴らさない。
-    func tempoTick() {
-        if let cueEndsAt, ContinuousClock.now < cueEndsAt + tempoQuietTime { return }
-        WKInterfaceDevice.current().play(Self.tempoHaptic)
+    /// - Parameter accented: 切り替え直後・再開直後の、強く鳴らす拍か
+    /// - Returns: 実際に鳴らしたか
+    @discardableResult
+    func tempoTick(accented: Bool = false) -> Bool {
+        if let cueEndsAt, ContinuousClock.now < cueEndsAt + tempoQuietTime { return false }
+        WKInterfaceDevice.current().play(accented ? Self.accentTempoHaptic : Self.tempoHaptic)
+        return true
     }
 
     static let tempoHaptic: WKHapticType = .start
+    /// 切り替え直後・再開直後の4歩。いちばん強く感じる種類を使う
+    static let accentTempoHaptic: WKHapticType = .notification
 
     /// 長い振動: 強めの振動を短い間隔で詰めて並べる
     static let longBuzz: [Step] = [
@@ -79,19 +85,19 @@ final class HapticPlayer {
         Step(haptic: .notification, delay: .milliseconds(250)),
     ]
 
-    /// 小刻みな振動: 短いタップを素早く5回
-    static let rapidTaps: [Step] = [
-        Step(haptic: .start, delay: .zero),
-        Step(haptic: .start, delay: .milliseconds(160)),
-        Step(haptic: .start, delay: .milliseconds(160)),
-        Step(haptic: .start, delay: .milliseconds(160)),
-        Step(haptic: .start, delay: .milliseconds(160)),
+    /// 強く長い振動（切り替え5秒前）: 強い振動を長い振動より多く、詰めて並べる
+    static let strongBuzz: [Step] = [
+        Step(haptic: .notification, delay: .zero),
+        Step(haptic: .directionUp, delay: .milliseconds(220)),
+        Step(haptic: .notification, delay: .milliseconds(220)),
+        Step(haptic: .directionUp, delay: .milliseconds(220)),
+        Step(haptic: .notification, delay: .milliseconds(220)),
     ]
 
     static func pattern(for cue: HapticCue) -> [Step] {
         switch cue {
-        case .switchSoon, .briskStart, .easyStart: longBuzz
-        case .switchVerySoon: rapidTaps
+        case .switchSoon: strongBuzz
+        case .briskStart, .easyStart: longBuzz
         case .recommendedReached, .finished: [Step(haptic: .success, delay: .zero)]
         case .paused: [Step(haptic: .stop, delay: .zero)]
         case .resumed: [Step(haptic: .start, delay: .zero)]

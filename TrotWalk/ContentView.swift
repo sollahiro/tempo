@@ -13,7 +13,7 @@ struct ContentView: View {
                 Section {
                     Text("Apple Watch で「歩きはじめる」を押したら、あとは振動の合図に合わせて歩くだけ。画面を見る必要はありません。")
                 } header: {
-                    Text("Trot&Walk")
+                    Text("TEMPO WALK")
                 }
 
                 Section {
@@ -22,7 +22,7 @@ struct ContentView: View {
                             Text(DurationText.minutes(seconds)).tag(seconds)
                         }
                     }
-                    Toggle("切り替え前の予告（10秒前・5秒前）", isOn: $settings.value.switchWarningEnabled)
+                    Toggle("切り替え5秒前の予告", isOn: $settings.value.switchWarningEnabled)
                     Toggle("歩調テンポの振動", isOn: $settings.value.tempoEnabled)
                     Toggle("心拍で自動調整", isOn: $settings.value.intensityGuideEnabled)
                     Toggle("立ち止まったら自動で一時停止", isOn: $settings.value.autoPauseEnabled)
@@ -30,14 +30,14 @@ struct ContentView: View {
                 } header: {
                     Text("設定")
                 } footer: {
-                    Text("終わりの時間は決めません。目安は30分以上ですが、いつ終えても大丈夫です。終えるときは Watch の ✕ を長押しします。設定は Apple Watch にも反映されます。")
+                    Text("終わりの時間は決めません。目安は30分以上ですが、いつ終えても大丈夫です。終えるときは Watch の ✕ を押し、確認で「終了する」を選びます。設定は Apple Watch にも反映されます。")
                 }
 
                 Section("振動の合図") {
-                    HapticRow(title: "切り替え10秒前", pattern: "長い振動")
-                    HapticRow(title: "切り替え5秒前", pattern: "小刻みな振動")
+                    HapticRow(title: "切り替え5秒前", pattern: "強く長い振動")
                     HapticRow(title: "切り替え", pattern: "長い振動")
                     HapticRow(title: "歩調テンポ", pattern: "1歩ごとに振動、4歩鳴って4歩休む")
+                    HapticRow(title: "切り替え直後・再開後", pattern: "最初の4歩を強く")
                     HapticRow(title: "立ち止まった / 歩き出した", pattern: "停止 / 開始の振動")
                     HapticRow(title: "30分の目安", pattern: "成功の振動")
                     Text("振動が弱いときは、Watch アプリ →「サウンドと触覚」で「はっきり」を選ぶと強くなります。")
@@ -57,7 +57,7 @@ struct ContentView: View {
                     Text("ワークアウトは屋外ウォーキングとして、歩いたルート（GPS）と一緒にフィットネスとヘルスケアに保存されます。立ち止まっていた時間は記録から除かれます。")
                 }
             }
-            .navigationTitle("Trot&Walk")
+            .navigationTitle("TEMPO WALK")
         }
     }
 }

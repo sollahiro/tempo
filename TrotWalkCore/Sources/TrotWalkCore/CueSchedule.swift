@@ -6,10 +6,8 @@ public enum HapticCue: String, Equatable, Sendable {
     case briskStart
     /// 緩歩に切り替え
     case easyStart
-    /// 切り替え10秒前
+    /// 切り替え5秒前（強い振動）
     case switchSoon
-    /// 切り替え5秒前
-    case switchVerySoon
     /// おすすめの30分に届いた（一度だけ。強制ではなく、知らせるだけ）
     case recommendedReached
     /// 終了
@@ -31,8 +29,8 @@ public struct CueSchedule: Sendable {
         public let cue: HapticCue
     }
 
-    public static let defaultWarningLead: TimeInterval = 10
-    public static let finalWarningLead: TimeInterval = 5
+    /// 切り替えの予告を出す、切り替えまでの秒数
+    public static let warningLead: TimeInterval = 5
 
     public let plan: IntervalPlan
     public let warningsEnabled: Bool
@@ -54,11 +52,8 @@ public struct CueSchedule: Sendable {
         }
         if warningsEnabled {
             // 短すぎる区間では予告しない
-            if segment.duration > Self.defaultWarningLead * 2 {
-                events.append(Event(time: segment.end - Self.defaultWarningLead, cue: .switchSoon))
-            }
-            if segment.duration > Self.finalWarningLead * 2 {
-                events.append(Event(time: segment.end - Self.finalWarningLead, cue: .switchVerySoon))
+            if segment.duration > Self.warningLead * 2 {
+                events.append(Event(time: segment.end - Self.warningLead, cue: .switchSoon))
             }
         }
         return events

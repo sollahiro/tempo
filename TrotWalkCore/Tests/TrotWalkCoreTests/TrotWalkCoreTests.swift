@@ -43,8 +43,9 @@ final class CueScheduleTests: XCTestCase {
     func testCuesAroundSwitch() {
         let schedule = CueSchedule(plan: plan, milestone: nil)
         XCTAssertEqual(schedule.cues(from: 0, to: 1), [])
-        XCTAssertEqual(schedule.cues(from: 169, to: 170), [.switchSoon])
-        XCTAssertEqual(schedule.cues(from: 174, to: 175), [.switchVerySoon])
+        // 10秒前の予告はない
+        XCTAssertEqual(schedule.cues(from: 165, to: 174), [])
+        XCTAssertEqual(schedule.cues(from: 174, to: 175), [.switchSoon])
         XCTAssertEqual(schedule.cues(from: 179, to: 180), [.easyStart])
         XCTAssertEqual(schedule.cues(from: 359, to: 360), [.briskStart])
         // 終わりはなく、ずっと続く
@@ -54,7 +55,7 @@ final class CueScheduleTests: XCTestCase {
     func testLargeJumpReturnsOnlyLatestSwitchCue() {
         let schedule = CueSchedule(plan: plan, milestone: nil)
         XCTAssertEqual(schedule.cues(from: 160, to: 200), [.easyStart])
-        XCTAssertEqual(schedule.cues(from: 160, to: 176), [.switchVerySoon])
+        XCTAssertEqual(schedule.cues(from: 160, to: 176), [.switchSoon])
     }
 
     func testWarningsCanBeDisabled() {

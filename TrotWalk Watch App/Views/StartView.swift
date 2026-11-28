@@ -40,7 +40,7 @@ struct StartView: View {
                 }
                 .padding(.horizontal, 4)
             }
-            .navigationTitle("Trot&Walk")
+            .navigationTitle("TEMPO")
         }
     }
 
