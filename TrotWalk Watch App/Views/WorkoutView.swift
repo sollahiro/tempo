@@ -43,7 +43,7 @@ struct WorkoutView: View {
                     .primaryHandGesture()
                     .accessibilityLabel(workout.state == .paused ? "再開" : "一時停止")
 
-                    HoldToEndButton { workout.end() }
+                    EndButton { workout.end() }
                 }
                 .padding(.top, 4)
                 .disabled(workout.state == .ending)
@@ -54,38 +54,31 @@ struct WorkoutView: View {
     }
 }
 
-/// 長押しで終える終了ボタン。押し間違いだけ防げればよいので、確認画面は出さない。
-/// 押している間リングが満ちて、満ちたら終了する（途中で離せば何も起きない）。
-private struct HoldToEndButton: View {
+/// 終了ボタン。押すと「終了しますか？」と確認し、「終了する」を選んだときだけ終える。
+/// 「続ける」を選ぶか閉じれば、そのままワークアウトを続ける。
+private struct EndButton: View {
     let action: () -> Void
-    private let holdDuration: Double = 0.8
-    @State private var isPressing = false
+    @State private var isConfirming = false
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.red.opacity(0.25))
-            Circle()
-                .trim(from: 0, to: isPressing ? 1 : 0)
-                .stroke(Color.red, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(isPressing ? .linear(duration: holdDuration) : .easeOut(duration: 0.15), value: isPressing)
+        Button {
+            isConfirming = true
+        } label: {
             Image(systemName: "xmark")
                 .font(.body.bold())
         }
-        .frame(width: 44, height: 44)
-        .contentShape(Circle())
-        .onLongPressGesture(minimumDuration: holdDuration) {
-            WKInterfaceDevice.current().play(.success)
-            action()
-        } onPressingChanged: { pressing in
-            isPressing = pressing
-        }
-        .accessibilityElement()
+        .tint(.red)
         .accessibilityLabel("終了")
-        .accessibilityHint("長押しで終了します。ここまでの記録は保存されます")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { action() }
+        .accessibilityHint("終了するか確認します。ここまでの記録は保存されます")
+        .confirmationDialog("ワークアウトを終了しますか？", isPresented: $isConfirming, titleVisibility: .visible) {
+            Button("終了する", role: .destructive) {
+                WKInterfaceDevice.current().play(.success)
+                action()
+            }
+            Button("続ける", role: .cancel) {}
+        } message: {
+            Text("ここまでの記録は保存されます")
+        }
     }
 }
 

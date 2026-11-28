@@ -68,7 +68,8 @@ public struct IntensityCoach: Sendable {
         }
 
         guard position.elapsedInSegment >= gracePeriod(for: position.segment.phase),
-              position.remainingInSegment > CueSchedule.defaultWarningLead,
+              // 切り替えの予告と重ならないよう、終わり際は知らせない
+              position.remainingInSegment > CueSchedule.warningLead * 2,
               let wanted = desiredCue(heartRate: heartRate, phase: position.segment.phase)
         else {
             reset()

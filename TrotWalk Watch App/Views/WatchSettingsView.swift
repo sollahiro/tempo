@@ -36,6 +36,7 @@ struct WatchSettingsView: View {
                     Button(sample.title) { haptics.play(sample.cue) }
                 }
                 Button("歩調テンポ") { haptics.tempoTick() }
+                Button("歩調テンポ（切り替え直後の4歩）") { haptics.tempoTick(accented: true) }
                 Text("振動が弱いときは、iPhone の Watch アプリ →「サウンドと触覚」で「はっきり」を選ぶと強くなります。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -73,8 +74,8 @@ struct HapticSample {
     let cue: HapticCue
 
     static let all: [HapticSample] = [
-        HapticSample(title: "切り替え10秒前・切り替え", cue: .switchSoon),
-        HapticSample(title: "切り替え5秒前", cue: .switchVerySoon),
+        HapticSample(title: "切り替え5秒前", cue: .switchSoon),
+        HapticSample(title: "切り替え", cue: .briskStart),
         HapticSample(title: "30分の目安", cue: .recommendedReached),
         HapticSample(title: "一時停止", cue: .paused),
         HapticSample(title: "再開", cue: .resumed),

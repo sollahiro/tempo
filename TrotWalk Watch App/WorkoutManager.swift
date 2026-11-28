@@ -59,6 +59,9 @@ final class WorkoutManager: NSObject {
     /// 回答を受け付けたか（終了画面で一度だけ聞く）
     private(set) var feedbackRecorded = false
     @ObservationIgnored private var metronome: Task<Void, Never>?
+    /// 残りの強く鳴らす拍の数。切り替え直後と再開直後に、最初の4歩だけ強くする
+    @ObservationIgnored private var accentBeatsRemaining = 0
+    static let accentBeats = 4
     @ObservationIgnored private var lastTick: TimeInterval = 0
     @ObservationIgnored private var currentSegment: IntervalSegment?
     @ObservationIgnored private var currentSegmentStart: Date?
@@ -210,6 +213,7 @@ final class WorkoutManager: NSObject {
         case .paused:
             session?.resume()
             haptics.play(.resumed)
+            accentBeatsRemaining = Self.accentBeats
         default:
             break
         }
@@ -323,9 +327,11 @@ final class WorkoutManager: NSObject {
 
     /// 歩調テンポの振動を刻む。1歩ごとに1拍で、4歩鳴らして4歩休む。
     /// 間隔は毎拍、今のフェーズとテンポから決め直す。区間が変わったら数え直す。
+    /// 切り替え直後と再開直後は、実際に鳴った4歩を強く鳴らしてから、4歩休みに入る。
     private func startMetronome() {
         metronome?.cancel()
         guard tempo != nil else { return }
+        accentBeatsRemaining = Self.accentBeats
         metronome = Task { [weak self] in
             let clock = ContinuousClock()
             var next = clock.now
@@ -340,14 +346,29 @@ final class WorkoutManager: NSObject {
                     continue
                 }
                 if current.segmentIndex != segmentIndex {
+                    if segmentIndex != nil { self?.accentBeatsRemaining = Self.accentBeats }
                     segmentIndex = current.segmentIndex
                     beat = 0
                 }
                 next = max(next.advanced(by: .seconds(current.interval)), clock.now)
                 try? await clock.sleep(until: next)
                 if Task.isCancelled { return }
-                if self?.currentBeat() != nil, TempoCoach.isPulseBeat(beat) {
-                    self?.haptics.tempoTick()
+                guard let self else { return }
+                guard self.currentBeat() != nil else {
+                    beat += 1
+                    continue
+                }
+                if self.accentBeatsRemaining > 0 {
+                    // 切り替えの振動と重なって鳴らなかった拍は数えない
+                    if self.haptics.tempoTick(accented: true) {
+                        self.accentBeatsRemaining -= 1
+                        // 強い4歩が終わったら、休みの4歩から続ける
+                        beat = self.accentBeatsRemaining == 0 ? TempoCoach.beatsOn : 0
+                    }
+                    continue
+                }
+                if TempoCoach.isPulseBeat(beat) {
+                    self.haptics.tempoTick()
                 }
                 beat += 1
             }
@@ -357,8 +378,8 @@ final class WorkoutManager: NSObject {
     /// 今の拍の間隔と区間番号。テンポを鳴らさない時間なら nil。
     private func currentBeat() -> (interval: TimeInterval, segmentIndex: Int)? {
         guard state == .running, let tempo, let position else { return nil }
-        // 5秒前の小刻みな振動と混ざらないよう、切り替え直前はテンポを止める
-        if settings.switchWarningEnabled, position.remainingInSegment <= CueSchedule.finalWarningLead + 0.5 {
+        // 5秒前の強い振動と混ざらないよう、切り替え直前はテンポを止める
+        if settings.switchWarningEnabled, position.remainingInSegment <= CueSchedule.warningLead + 0.5 {
             return nil
         }
         return (interval: tempo.pulseInterval(for: position.segment.phase), segmentIndex: position.segment.index)
@@ -384,6 +405,7 @@ final class WorkoutManager: NSObject {
             isAutoPaused = false
             session?.resume()
             haptics.play(.resumed)
+            accentBeatsRemaining = Self.accentBeats
         default:
             break
         }
